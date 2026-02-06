@@ -1,41 +1,19 @@
-# 📸 Sistema de Control de Asistencia mediante Lectura de Credenciales
-
-Proyecto académico y tecnológico orientado a la automatización del registro de asistencia escolar mediante el uso de procesamiento digital de imágenes, OCR y una interfaz web.
-
 ---
 
-## 👥 Equipo de Trabajo
-- **José Gustavo López Gracia**
-- **Poom Flores**
+## 🧩 Estado Actual del Proyecto (Versión)
 
----
+La versión actual del sistema corresponde a la **v1.2**, la cual implementa la base funcional del control de asistencia mediante lectura de credenciales, incluyendo procesamiento de imágenes, OCR y generación de registros.
 
-## 🧠 Descripción General
+Es importante señalar que esta versión se considera una **etapa intermedia del desarrollo**, por lo que se identifican las siguientes áreas de mejora:
 
-Este proyecto implementa un sistema que permite registrar la asistencia de estudiantes a partir de la lectura de una credencial escolar. El sistema extrae información relevante como nombre, carrera y matrícula (a partir de los caracteres numéricos impresos), valida horarios y genera registros de asistencia de forma automatizada.
+- Integración más robusta entre el **frontend y el backend**, permitiendo una comunicación en tiempo real mediante servicios web (API REST).
+- Optimización del flujo de datos entre la interfaz web y el sistema de procesamiento.
+- Mejora en la persistencia y gestión de información mediante una base de datos relacional.
 
-El objetivo principal es reducir errores humanos, optimizar procesos administrativos y mejorar la transparencia en el control académico.
+Asimismo, como **línea de evolución del proyecto**, se plantea la incorporación de **reconocimiento facial** como mecanismo complementario o alternativo al uso de credenciales físicas, con el objetivo de:
 
----
+- Incrementar la seguridad del sistema.
+- Reducir la dependencia de objetos físicos.
+- Automatizar completamente el proceso de validación de identidad.
 
-## ⚙️ Tecnologías Utilizadas
-
-- **Backend:** Python
-- **Procesamiento de imágenes:** OpenCV
-- **Reconocimiento óptico:** Tesseract OCR
-- **Frontend:** HTML5, CSS3
-- **Control de versiones:** Git / GitHub
-
----
-
-## ▶️ Cómo Ejecutar el Proyecto (Código Fuente)
-
-### 1️⃣ Requisitos Previos
-- Python 3.10 o superior
-- Git
-- Tesseract OCR instalado y agregado al PATH del sistema
-
-### 2️⃣ Clonar el repositorio
-```bash
-git clone https://github.com/tavo631/listas-automatizadas.git
-cd listas-automatizadas
+Estas mejoras están contempladas para versiones futuras del sistema, manteniendo un enfoque de desarrollo incremental y escalable.
