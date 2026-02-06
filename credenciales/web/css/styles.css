@@ -1,0 +1,200 @@
+/* ------------------ RESET BÁSICO ------------------ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+body {
+  background-color: #f4f6f8;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* ------------------ NAVBAR GLOBAL ------------------ */
+header {
+  background-color: #0a2540;
+  padding: 12px 24px;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* LOGO */
+.logo {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+/* MENÚ PRINCIPAL */
+.menu,
+.menu-utilidad {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+}
+
+.menu a,
+.menu-utilidad a {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: color 0.3s;
+}
+
+.menu a:hover,
+.menu-utilidad a:hover {
+  color: #00d4ff;
+}
+
+/* ------------------ CONTENIDO ------------------ */
+main {
+  max-width: 900px;
+  margin: 40px auto;
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+h1 {
+  margin-bottom: 15px;
+  color: #0a2540;
+}
+
+h2 {
+  margin-top: 20px;
+  color: #0a2540;
+}
+
+p {
+  margin-bottom: 15px;
+}
+
+/* ------------------ SECCIONES DE SERVICIOS ------------------ */
+section {
+  margin-bottom: 20px;
+  padding: 15px;
+  border-left: 4px solid #00d4ff;
+  background-color: #f9fbfd;
+}
+
+/* ------------------ FORMULARIOS ------------------ */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label {
+  font-weight: 600;
+}
+
+input,
+textarea {
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 0.95rem;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: #00d4ff;
+}
+
+/* BOTÓN */
+button {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #0a2540;
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background-color: #163d66;
+}
+
+/* MENSAJES DE ERROR (VALIDACIÓN) */
+.error {
+  color: #d93025;
+  font-size: 0.85rem;
+}
+
+/* ------------------ BUZÓN / CHAT ------------------ */
+.mensaje {
+  padding: 12px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.mensaje.recibido {
+  background-color: #e8f0fe;
+}
+
+.mensaje.enviado {
+  background-color: #d1f7e3;
+  text-align: right;
+}
+
+/* ------------------ PÁGINA 404 ------------------ */
+.error-page {
+  text-align: center;
+}
+
+.error-page h1 {
+  font-size: 4rem;
+  color: #0a2540;
+}
+
+.error-page p {
+  margin: 20px 0;
+}
+
+.error-page a {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #0a2540;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 5px;
+}
+
+.error-page a:hover {
+  background-color: #163d66;
+}
+
+/* ------------------ MAPA DEL SITIO ------------------ */
+ul {
+  margin-left: 20px;
+}
+
+ul li {
+  margin: 5px 0;
+}
+
+/* ------------------ RESPONSIVE BÁSICO ------------------ */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .menu,
+  .menu-utilidad {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
