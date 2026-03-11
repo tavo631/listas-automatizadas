@@ -77,7 +77,6 @@
                     <li><a href="#" onclick="router('servicios')" class="hover:text-green-700 transition nav-link" id="nav-servicios">Servicios</a></li>
                     <li><a href="#" onclick="router('proyecto')" class="hover:text-green-700 transition nav-link text-green-700" id="nav-proyecto"></i> Proyecto</a></li>
                     <li><a href="#" onclick="router('scanner')" class="hover:text-green-700 transition nav-link" id="nav-scanner">Escáner</a></li>
-                    <li id="nav-admin-link" class="hidden"><a href="#" onclick="router('adminPanel')" class="hover:text-red-600 transition nav-link text-red-500 font-bold" id="nav-adminPanel"><i class="ph ph-shield-star"></i> Admin</a></li>
                 </ul>
                 <div class="h-6 w-px bg-gray-300"></div>
                 <!-- Menú Utilidad -->
@@ -404,9 +403,32 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Contraseña</label>
-                                <input type="password" id="regPass" required pattern="(?=.*\\d)(?=.*[A-Z]).{8,}" title="Mínimo 8 caracteres, 1 mayúscula, 1 número" placeholder="Mín. 8 caracteres" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                                <p class="text-xs text-gray-400 mt-1">Mín. 8 caracteres, 1 Mayúscula, 1 Número.</p>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Contraseña Segura</label>
+                                <input type="password" id="regPass" required
+                                    placeholder="Escribe tu contraseña..."
+                                    class="w-full p-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all duration-300">
+                                <ul class="mt-3 space-y-1.5 text-sm font-medium" id="password-rules">
+                                    <li id="rule-length" class="flex items-center gap-2 text-gray-400 transition-all duration-300">
+                                        <i class="ph ph-x-circle text-lg icon-indicator"></i>
+                                        <span>Mínimo 8 caracteres</span>
+                                    </li>
+                                    <li id="rule-lower" class="flex items-center gap-2 text-gray-400 transition-all duration-300">
+                                        <i class="ph ph-x-circle text-lg icon-indicator"></i>
+                                        <span>Al menos 1 minúscula</span>
+                                    </li>
+                                    <li id="rule-upper" class="flex items-center gap-2 text-gray-400 transition-all duration-300">
+                                        <i class="ph ph-x-circle text-lg icon-indicator"></i>
+                                        <span>Al menos 1 mayúscula</span>
+                                    </li>
+                                    <li id="rule-number" class="flex items-center gap-2 text-gray-400 transition-all duration-300">
+                                        <i class="ph ph-x-circle text-lg icon-indicator"></i>
+                                        <span>Al menos 1 número</span>
+                                    </li>
+                                    <li id="rule-special" class="flex items-center gap-2 text-gray-400 transition-all duration-300">
+                                        <i class="ph ph-x-circle text-lg icon-indicator"></i>
+                                        <span>Al menos 1 carácter especial (ej. @$!%*)</span>
+                                    </li>
+                                </ul>
                             </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase">Confirmar Contraseña</label>
@@ -729,31 +751,96 @@
         let pendingRegisterData = null;
         let emailVerifyCode = null;
 
+        // Función hash SHA-256 usando Web Crypto API (nativa del navegador, sin librerías)
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         function bindRegister() {
-            // Validación en tiempo real de confirmación de contraseña
             const passInput = document.getElementById('regPass');
             const confirmInput = document.getElementById('regPassConfirm');
             const matchMsg = document.getElementById('passMatchMsg');
+            const btn = document.getElementById('regBtn');
 
+            // ── Reglas visuales en tiempo real ──
+            const rules = {
+                length:  { el: document.getElementById('rule-length'),  test: v => v.length >= 8 },
+                lower:   { el: document.getElementById('rule-lower'),   test: v => /[a-z]/.test(v) },
+                upper:   { el: document.getElementById('rule-upper'),   test: v => /[A-Z]/.test(v) },
+                number:  { el: document.getElementById('rule-number'),  test: v => /[0-9]/.test(v) },
+                special: { el: document.getElementById('rule-special'), test: v => /[^A-Za-z0-9]/.test(v) },
+            };
+
+            function updateRule(el, isValid, hasInput) {
+                const icon = el.querySelector('.icon-indicator');
+                if (isValid) {
+                    el.classList.remove('text-gray-400', 'text-red-400');
+                    el.classList.add('text-green-600');
+                    icon.className = icon.className.replace('ph-x-circle', 'ph-check-circle-fill');
+                } else {
+                    el.classList.remove('text-green-600');
+                    icon.className = icon.className.replace('ph-check-circle-fill', 'ph-x-circle');
+                    if (hasInput) {
+                        el.classList.add('text-red-400');
+                        el.classList.remove('text-gray-400');
+                    } else {
+                        el.classList.add('text-gray-400');
+                        el.classList.remove('text-red-400');
+                    }
+                }
+            }
+
+            function checkPasswordRules() {
+                const val = passInput.value;
+                const hasInput = val.length > 0;
+                let allValid = true;
+                for (const key in rules) {
+                    const valid = rules[key].test(val);
+                    if (!valid) allValid = false;
+                    updateRule(rules[key].el, valid, hasInput);
+                }
+                return allValid;
+            }
+
+            // ── Confirmar contraseña ──
             function checkMatch() {
                 if (!confirmInput.value) { matchMsg.classList.add('hidden'); return; }
                 if (passInput.value === confirmInput.value) {
                     matchMsg.textContent = '✓ Las contraseñas coinciden';
                     matchMsg.className = 'text-xs mt-1 text-green-600';
-                    matchMsg.classList.remove('hidden');
                 } else {
                     matchMsg.textContent = '✗ Las contraseñas no coinciden';
                     matchMsg.className = 'text-xs mt-1 text-red-500';
-                    matchMsg.classList.remove('hidden');
+                }
+                matchMsg.classList.remove('hidden');
+            }
+
+            // ── Habilitar botón solo cuando todo es válido ──
+            function syncBtn() {
+                const allRulesOk = checkPasswordRules();
+                const passwordsMatch = passInput.value === confirmInput.value && confirmInput.value.length > 0;
+                if (allRulesOk && passwordsMatch) {
+                    btn.disabled = false;
+                    btn.classList.remove('bg-slate-300', 'cursor-not-allowed', 'bg-green-700');
+                    btn.classList.add('bg-green-700', 'hover:bg-green-800', 'shadow-lg');
+                } else {
+                    btn.disabled = true;
+                    btn.classList.add('bg-slate-400', 'cursor-not-allowed');
+                    btn.classList.remove('bg-green-700', 'hover:bg-green-800', 'shadow-lg');
                 }
             }
-            passInput.addEventListener('input', checkMatch);
-            confirmInput.addEventListener('input', checkMatch);
 
+            passInput.addEventListener('input', () => { checkPasswordRules(); checkMatch(); syncBtn(); });
+            confirmInput.addEventListener('input', () => { checkMatch(); syncBtn(); });
+
+            // ── Submit ──
             document.getElementById('regForm').onsubmit = async (e) => {
                 e.preventDefault();
                 const msgBox = document.getElementById('regMsg');
-                const btn = document.getElementById('regBtn');
 
                 const nombre = document.getElementById('regNombre').value.trim();
                 const matricula = document.getElementById('regMatricula').value.trim();
@@ -762,7 +849,6 @@
                 const pass = document.getElementById('regPass').value;
                 const passConfirm = document.getElementById('regPassConfirm').value;
 
-                // Validar que las contraseñas coincidan
                 if (pass !== passConfirm) {
                     msgBox.textContent = 'Las contraseñas no coinciden.';
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
@@ -770,12 +856,12 @@
                     return;
                 }
 
-                // Verificar que la matrícula no esté ya registrada
                 btn.disabled = true;
                 btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Enviando código...';
                 msgBox.classList.add('hidden');
 
                 try {
+                    // Verificar matrícula duplicada
                     const q = query(getCol('students'), where("matricula", "==", matricula));
                     const snap = await getDocs(q);
                     if (!snap.empty) {
@@ -787,13 +873,16 @@
                         return;
                     }
 
+                    // Generar hash SHA-256 de la contraseña antes de guardarla
+                    const passwordHash = await hashPassword(pass);
+
                     // Generar código de 6 dígitos
                     emailVerifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-                    // Guardar datos pendientes
+                    // Guardar datos pendientes con contraseña hasheada
                     pendingRegisterData = {
                         nombre, matricula, email, carrera,
-                        password: pass,
+                        password: passwordHash,
                         foto: `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=15803d&color=fff`
                     };
 
@@ -804,7 +893,6 @@
                         codigo: emailVerifyCode
                     });
 
-                    // Redirigir a pantalla de verificación
                     router('verifyEmail');
 
                 } catch (err) {
@@ -867,9 +955,11 @@
                 const q = query(getCol('students'), where("matricula", "==", mat));
                 const snap = await getDocs(q);
 
+                // Hashear la contraseña ingresada para comparar con el hash guardado
+                const passHash = await hashPassword(pass);
                 let valid = false;
                 snap.forEach(doc => {
-                    if (doc.data().password === pass) {
+                    if (doc.data().password === passHash) {
                         valid = true;
                         tempStudentFor2FA = { id: doc.id, ...doc.data() };
                     }
@@ -992,9 +1082,10 @@
                 try {
                     const q = query(getCol('admins'), where("email", "==", user));
                     const snap = await getDocs(q);
+                    const passHash = await hashPassword(pass);
                     let valid = false;
                     snap.forEach(doc => {
-                        if (doc.data().password === pass) {
+                        if (doc.data().password === passHash) {
                             valid = true;
                             currentAdmin = { id: doc.id, ...doc.data() };
                         }
@@ -1390,139 +1481,6 @@
         initApp();
         updateAuthUI();
         router('home');
-    </script>
-</body>
-</html>
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validación de Contraseña Interactiva</title>
-    <!-- Tailwind CSS y Phosphor Icons para los estilos y las "casillas" -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-</head>
-<body class="bg-slate-100 min-h-screen flex items-center justify-center p-6">
-
-    <!-- CONTENEDOR DEL FRAGMENTO (Copia esto a tu formulario) -->
-    <div class="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-        
-        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Contraseña Segura</label>
-        
-        <div class="relative">
-            <input 
-                type="password" 
-                id="regPass" 
-                required 
-                pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}"
-                class="w-full p-3 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all duration-300"
-                placeholder="Escribe tu contraseña..."
-            >
-        </div>
-
-        <!-- Casillas de Validación (Se actualizan por JS) -->
-        <ul class="mt-4 space-y-2 text-sm text-gray-400 font-medium transition-colors" id="password-rules">
-            
-            <li id="rule-length" class="flex items-center gap-2 transition-all duration-300">
-                <i class="ph ph-x-circle text-lg icon-indicator"></i>
-                <span>Mínimo 8 caracteres</span>
-            </li>
-
-            <li id="rule-lower" class="flex items-center gap-2 transition-all duration-300">
-                <i class="ph ph-x-circle text-lg icon-indicator"></i>
-                <span>Al menos 1 minúscula</span>
-            </li>
-            
-            <li id="rule-upper" class="flex items-center gap-2 transition-all duration-300">
-                <i class="ph ph-x-circle text-lg icon-indicator"></i>
-                <span>Al menos 1 mayúscula</span>
-            </li>
-            
-            <li id="rule-number" class="flex items-center gap-2 transition-all duration-300">
-                <i class="ph ph-x-circle text-lg icon-indicator"></i>
-                <span>Al menos 1 número</span>
-            </li>
-
-            <li id="rule-special" class="flex items-center gap-2 transition-all duration-300">
-                <i class="ph ph-x-circle text-lg icon-indicator"></i>
-                <span>Al menos 1 carácter especial (ej. @$!%*)</span>
-            </li>
-            
-        </ul>
-        
-        <button id="btnRegistrar" disabled class="mt-6 w-full bg-slate-300 text-white font-bold py-3 rounded-lg transition-all duration-300 cursor-not-allowed">
-            Registrar
-        </button>
-
-    </div>
-    <!-- FIN DEL FRAGMENTO -->
-
-    <!-- LÓGICA JAVASCRIPT -->
-    <script>
-        // Referencias a los elementos del DOM
-        const passInput = document.getElementById('regPass');
-        const ruleLength = document.getElementById('rule-length');
-        const ruleLower = document.getElementById('rule-lower');
-        const ruleUpper = document.getElementById('rule-upper');
-        const ruleNumber = document.getElementById('rule-number');
-        const ruleSpecial = document.getElementById('rule-special');
-        const btnRegistrar = document.getElementById('btnRegistrar');
-
-        // Escuchar cada vez que el usuario escribe
-        passInput.addEventListener('input', function() {
-            const val = this.value;
-
-            // Función para cambiar colores e iconos
-            const updateRule = (element, isValid) => {
-                const icon = element.querySelector('.icon-indicator');
-                
-                if (isValid) {
-                    // Estado Correcto (Verde)
-                    element.classList.remove('text-gray-400', 'text-red-400');
-                    element.classList.add('text-green-600');
-                    icon.classList.replace('ph-x-circle', 'ph-check-circle-fill');
-                } else {
-                    // Estado Incorrecto o Incompleto (Rojo/Gris)
-                    element.classList.remove('text-green-600');
-                    icon.classList.replace('ph-check-circle-fill', 'ph-x-circle');
-                    
-                    if (val.length > 0) {
-                        element.classList.add('text-red-400');
-                        element.classList.remove('text-gray-400');
-                    } else {
-                        element.classList.add('text-gray-400');
-                        element.classList.remove('text-red-400');
-                    }
-                }
-            };
-
-            // Evaluamos las condiciones usando Expresiones Regulares (Regex)
-            const isLengthValid = val.length >= 8;
-            const isLowerValid = /[a-z]/.test(val);
-            const isUpperValid = /[A-Z]/.test(val);
-            const isNumberValid = /[0-9]/.test(val);
-            const isSpecialValid = /[^A-Za-z0-9]/.test(val);
-
-            // Actualizamos la interfaz
-            updateRule(ruleLength, isLengthValid);
-            updateRule(ruleLower, isLowerValid);
-            updateRule(ruleUpper, isUpperValid);
-            updateRule(ruleNumber, isNumberValid);
-            updateRule(ruleSpecial, isSpecialValid);
-
-            // Habilitar el botón solo si todo es correcto
-            if (isLengthValid && isLowerValid && isUpperValid && isNumberValid && isSpecialValid) {
-                btnRegistrar.disabled = false;
-                btnRegistrar.classList.remove('bg-slate-300', 'cursor-not-allowed');
-                btnRegistrar.classList.add('bg-green-700', 'hover:bg-green-800', 'shadow-lg');
-            } else {
-                btnRegistrar.disabled = true;
-                btnRegistrar.classList.add('bg-slate-300', 'cursor-not-allowed');
-                btnRegistrar.classList.remove('bg-green-700', 'hover:bg-green-800', 'shadow-lg');
-            }
-        });
     </script>
 </body>
 </html>
