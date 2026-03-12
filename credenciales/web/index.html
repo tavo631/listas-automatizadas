@@ -158,7 +158,7 @@
     ========================================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, query, where, doc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 1. CONFIGURACIÓN FIREBASE (Tus Credenciales Reales)
@@ -380,27 +380,50 @@
             registro: `
                 <div class="fade-in max-w-md mx-auto mt-10">
                     <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
-                        <h2 class="text-2xl font-bold text-center mb-6">Nuevo Alumno</h2>
-                        <form id="regForm" class="space-y-4">
+                        <h2 class="text-2xl font-bold text-center mb-2">Nuevo Alumno</h2>
+                        <p class="text-center text-gray-400 text-sm mb-6">Ingresa tu matrícula para verificar tus datos</p>
+
+                        <!-- PASO 1: Buscar matrícula -->
+                        <div id="stepBuscar">
+                            <label class="text-xs font-bold text-gray-500 uppercase">Matrícula</label>
+                            <div class="flex gap-2 mt-1">
+                                <input type="text" id="buscarMatricula" placeholder="Ej: 2023001"
+                                    class="flex-grow p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-green-500 transition outline-none">
+                                <button type="button" onclick="buscarPreregistro()"
+                                    class="bg-green-700 text-white px-4 py-3 rounded-lg font-bold hover:bg-green-800 transition flex items-center gap-2 whitespace-nowrap">
+                                    <i class="ph ph-magnifying-glass"></i> Buscar
+                                </button>
+                            </div>
+                            <div id="buscarMsg" class="hidden mt-3 text-sm text-center font-medium p-3 rounded-lg"></div>
+                        </div>
+
+                        <!-- PASO 2: Formulario (aparece tras encontrar la matrícula) -->
+                        <form id="regForm" class="space-y-4 hidden mt-4">
+                            <!-- Badge de verificado -->
+                            <div class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+                                <i class="ph ph-seal-check text-green-600 text-2xl"></i>
+                                <div>
+                                    <p class="text-xs text-green-600 font-bold uppercase">Alumno verificado</p>
+                                    <p class="text-sm text-green-800 font-medium" id="alumnoVerificadoNombre"></p>
+                                </div>
+                            </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase">Nombre Completo</label>
-                                <input type="text" id="regNombre" required placeholder="Ej: Juan Pérez García" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
+                                <input type="text" id="regNombre" required readonly
+                                    class="w-full p-3 rounded-lg border bg-gray-100 text-gray-500 cursor-not-allowed transition">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Matrícula</label>
-                                <input type="text" id="regMatricula" required placeholder="Ej: 2023001" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Correo Institucional</label>
-                                <input type="email" id="regEmail" required placeholder="Ej: alumno@utn.edu.mx" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
+                                <input type="hidden" id="regMatricula">
                             </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase">Carrera</label>
-                                <select id="regCarrera" class="w-full p-3 rounded-lg border bg-gray-50">
-                                    <option>Ing. Software</option>
-                                    <option>Mecatrónica</option>
-                                    <option>Administración</option>
-                                </select>
+                                <input type="text" id="regCarrera" required readonly
+                                    class="w-full p-3 rounded-lg border bg-gray-100 text-gray-500 cursor-not-allowed transition">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase">Correo Electrónico</label>
+                                <input type="email" id="regEmail" required placeholder="Ej: alumno@utn.edu.mx"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-green-500 transition outline-none">
                             </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Contraseña Segura</label>
@@ -436,7 +459,8 @@
                                 <p id="passMatchMsg" class="text-xs mt-1 hidden"></p>
                             </div>
                             <div id="regMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
-                            <button type="submit" id="regBtn" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg hover:bg-green-800 transition shadow-lg flex items-center justify-center gap-2">
+                            <button type="submit" id="regBtn" disabled
+                                class="w-full bg-slate-400 cursor-not-allowed text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
                                 <i class="ph ph-paper-plane-right"></i> Enviar Código de Verificación
                             </button>
                         </form>
@@ -467,6 +491,37 @@
                 </div>
             `,
 
+            // 3c. RECUPERAR CONTRASEÑA
+            forgotPassword: `
+                <div class="fade-in max-w-sm mx-auto mt-16">
+                    <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-yellow-100 text-yellow-600 rounded-full mb-4">
+                                <i class="ph ph-key text-3xl"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold">Recuperar Contraseña</h2>
+                            <p class="text-gray-400 text-sm mt-2">Te enviaremos un correo para que puedas crear una nueva contraseña.</p>
+                        </div>
+                        <form id="forgotForm" class="space-y-4">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase">Correo Electrónico</label>
+                                <input type="email" id="forgotEmail" required placeholder="Ej: alumno@utn.edu.mx"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 outline-none transition">
+                            </div>
+                            <div id="forgotMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
+                            <button type="submit" id="forgotBtn"
+                                class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2">
+                                <i class="ph ph-paper-plane-right"></i> Enviar correo de recuperación
+                            </button>
+                            <button type="button" onclick="router('login')"
+                                class="w-full text-sm text-gray-400 hover:text-gray-600 transition py-2">
+                                ← Volver al acceso
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `,
+
             // 4. LOGIN (Paso 1)
             login: `
                 <div class="fade-in max-w-sm mx-auto mt-16">
@@ -476,9 +531,9 @@
                             <h2 class="text-2xl font-bold">Acceso Seguro</h2>
                         </div>
                         <form id="loginForm" class="space-y-4">
-                            <input type="text" id="logMatricula" placeholder="Matrícula (Ej: 2023001)" value="2023001" required class="w-full p-3 rounded-lg border focus:ring-2 ring-green-200">
-                            <input type="password" id="logPass" placeholder="Contraseña" value="Password123" required class="w-full p-3 rounded-lg border focus:ring-2 ring-green-200">
-                            <div class="text-right"><a href="#" onclick="alert('Se ha enviado un correo de recuperación.')" class="text-xs text-green-600 font-medium">¿Olvidaste tu contraseña?</a></div>
+                            <input type="text" id="logMatricula" placeholder="Matrícula (Ej: 2023001)" required class="w-full p-3 rounded-lg border focus:ring-2 ring-green-200">
+                            <input type="password" id="logPass" placeholder="Contraseña" required class="w-full p-3 rounded-lg border focus:ring-2 ring-green-200">
+                            <div class="text-right"><a href="#" onclick="router('forgotPassword')" class="text-xs text-green-600 font-medium hover:underline">¿Olvidaste tu contraseña?</a></div>
                             <div id="loginMsg" class="text-red-500 text-xs text-center hidden"></div>
                             <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition">Ingresar</button>
                         </form>
@@ -683,6 +738,9 @@
                         <button onclick="adminTab('attendance')" id="tab-attendance" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
                             <i class="ph ph-clipboard-text"></i> Asistencias
                         </button>
+                        <button onclick="adminTab('preregistros')" id="tab-preregistros" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
+                            <i class="ph ph-user-plus"></i> Pre-registros
+                        </button>
                     </div>
 
                     <!-- Contenido de cada tab -->
@@ -731,6 +789,8 @@
             } else if (route === 'verifyEmail') {
                 if (!pendingRegisterData) { router('registro'); return; }
                 bindVerifyEmail();
+            } else if (route === 'forgotPassword') {
+                bindForgotPassword();
             } else if (route === 'verification') {
                 bind2FA();
             } else if (route === 'scanner') {
@@ -750,6 +810,69 @@
         // 1. REGISTRO
         let pendingRegisterData = null;
         let emailVerifyCode = null;
+
+        // Búsqueda de pre-registro por matrícula
+        window.buscarPreregistro = async () => {
+            const matricula = document.getElementById('buscarMatricula').value.trim();
+            const msgBox = document.getElementById('buscarMsg');
+            const btnBuscar = document.querySelector('#stepBuscar button');
+
+            if (!matricula) {
+                msgBox.textContent = 'Ingresa tu matrícula para continuar.';
+                msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-yellow-50 text-yellow-700';
+                msgBox.classList.remove('hidden');
+                return;
+            }
+
+            btnBuscar.disabled = true;
+            btnBuscar.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Buscando...';
+            msgBox.classList.add('hidden');
+
+            try {
+                // Buscar en el catálogo de pre-registros
+                const q = query(getCol('preregistros'), where("matricula", "==", matricula));
+                const snap = await getDocs(q);
+
+                if (snap.empty) {
+                    msgBox.textContent = 'Matrícula no encontrada. Contacta al administrador para ser agregado al sistema.';
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                    msgBox.classList.remove('hidden');
+                    btnBuscar.disabled = false;
+                    btnBuscar.innerHTML = '<i class="ph ph-magnifying-glass"></i> Buscar';
+                    return;
+                }
+
+                // Verificar que no esté ya registrado como usuario
+                const qReg = query(getCol('students'), where("matricula", "==", matricula));
+                const snapReg = await getDocs(qReg);
+                if (!snapReg.empty) {
+                    msgBox.textContent = 'Esta matrícula ya tiene una cuenta registrada. Inicia sesión.';
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-yellow-50 text-yellow-700';
+                    msgBox.classList.remove('hidden');
+                    btnBuscar.disabled = false;
+                    btnBuscar.innerHTML = '<i class="ph ph-magnifying-glass"></i> Buscar';
+                    return;
+                }
+
+                // Encontrado: autocompletar y mostrar formulario
+                const alumno = snap.docs[0].data();
+                document.getElementById('regNombre').value = alumno.nombre;
+                document.getElementById('regMatricula').value = alumno.matricula;
+                document.getElementById('regCarrera').value = alumno.carrera;
+                document.getElementById('alumnoVerificadoNombre').textContent = alumno.nombre;
+
+                // Mostrar formulario y ocultar buscador
+                document.getElementById('regForm').classList.remove('hidden');
+                document.getElementById('stepBuscar').classList.add('hidden');
+
+            } catch (err) {
+                msgBox.textContent = 'Error al buscar: ' + err.message;
+                msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                msgBox.classList.remove('hidden');
+                btnBuscar.disabled = false;
+                btnBuscar.innerHTML = '<i class="ph ph-magnifying-glass"></i> Buscar';
+            }
+        };
 
         // Función hash SHA-256 usando Web Crypto API (nativa del navegador, sin librerías)
         async function hashPassword(password) {
@@ -825,7 +948,7 @@
                 const passwordsMatch = passInput.value === confirmInput.value && confirmInput.value.length > 0;
                 if (allRulesOk && passwordsMatch) {
                     btn.disabled = false;
-                    btn.classList.remove('bg-slate-300', 'cursor-not-allowed', 'bg-green-700');
+                    btn.classList.remove('bg-slate-400', 'cursor-not-allowed');
                     btn.classList.add('bg-green-700', 'hover:bg-green-800', 'shadow-lg');
                 } else {
                     btn.disabled = true;
@@ -845,7 +968,7 @@
                 const nombre = document.getElementById('regNombre').value.trim();
                 const matricula = document.getElementById('regMatricula').value.trim();
                 const email = document.getElementById('regEmail').value.trim();
-                const carrera = document.getElementById('regCarrera').value;
+                const carrera = document.getElementById('regCarrera').value.trim();
                 const pass = document.getElementById('regPass').value;
                 const passConfirm = document.getElementById('regPassConfirm').value;
 
@@ -879,9 +1002,12 @@
                     // Generar código de 6 dígitos
                     emailVerifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-                    // Guardar datos pendientes con contraseña hasheada
+                    // Guardar datos pendientes
+                    // rawPassword: para crear usuario en Firebase Auth (solo se usa una vez, no se guarda en Firestore)
+                    // password: hash SHA-256 que SÍ se guarda en Firestore como respaldo
                     pendingRegisterData = {
                         nombre, matricula, email, carrera,
+                        rawPassword: pass,
                         password: passwordHash,
                         foto: `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=15803d&color=fff`
                     };
@@ -925,15 +1051,38 @@
                 msgBox.classList.remove('hidden');
 
                 try {
-                    await addDoc(getCol('students'), pendingRegisterData);
+                    // 1. Crear usuario en Firebase Authentication
+                    const userCredential = await createUserWithEmailAndPassword(
+                        auth,
+                        pendingRegisterData.email,
+                        pendingRegisterData.rawPassword  // contraseña original (solo para Firebase Auth)
+                    );
+                    const uid = userCredential.user.uid;
+
+                    // 2. Guardar perfil en Firestore usando el UID como ID del documento
+                    //    No guardamos la contraseña — Firebase Auth la maneja de forma segura
+                    const { rawPassword, ...perfilSinPassword } = pendingRegisterData;
+                    await setDoc(doc(db, 'students', uid), perfilSinPassword);
+
                     pendingRegisterData = null;
                     emailVerifyCode = null;
+
                     setTimeout(() => {
                         alert('✅ ¡Registro exitoso! Ya puedes iniciar sesión.');
                         router('login');
                     }, 800);
+
                 } catch (err) {
-                    msgBox.textContent = 'Error al guardar en la base de datos: ' + err.message;
+                    console.error(err);
+                    let errorMsg = 'Error al crear la cuenta.';
+                    if (err.code === 'auth/email-already-in-use') {
+                        errorMsg = 'Este correo ya tiene una cuenta. Intenta iniciar sesión.';
+                    } else if (err.code === 'auth/invalid-email') {
+                        errorMsg = 'El correo no es válido.';
+                    } else if (err.code === 'auth/weak-password') {
+                        errorMsg = 'La contraseña es muy débil.';
+                    }
+                    msgBox.textContent = errorMsg;
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                 }
             };
@@ -952,43 +1101,106 @@
                 btn.textContent = 'Verificando...';
                 msgBox.classList.add('hidden');
 
-                const q = query(getCol('students'), where("matricula", "==", mat));
-                const snap = await getDocs(q);
+                try {
+                    // 1. Buscar el correo asociado a esa matrícula en Firestore
+                    const q = query(getCol('students'), where("matricula", "==", mat));
+                    const snap = await getDocs(q);
 
-                // Hashear la contraseña ingresada para comparar con el hash guardado
-                const passHash = await hashPassword(pass);
-                let valid = false;
-                snap.forEach(doc => {
-                    if (doc.data().password === passHash) {
-                        valid = true;
-                        tempStudentFor2FA = { id: doc.id, ...doc.data() };
-                    }
-                });
-
-                if (valid) {
-                    const code = Math.floor(100000 + Math.random() * 900000).toString();
-                    sessionStorage.setItem('2fa', code);
-
-                    try {
-                        btn.textContent = 'Enviando código...';
-                        await emailjs.send("service_5cvo5ap", "template_h9mankr", {
-                            nombre: tempStudentFor2FA.nombre,
-                            email: tempStudentFor2FA.email,
-                            codigo: code
-                        });
-                        router('verification');
-                    } catch (err) {
-                        console.error(err);
-                        msgBox.innerText = 'Error al enviar el código al correo. Intenta de nuevo.';
+                    if (snap.empty) {
+                        msgBox.innerText = 'Matrícula no registrada.';
                         msgBox.classList.remove('hidden');
                         btn.disabled = false;
                         btn.textContent = 'Ingresar';
+                        return;
                     }
-                } else {
-                    msgBox.innerText = 'Credenciales Incorrectas';
+
+                    const studentDoc = snap.docs[0];
+                    const studentData = { id: studentDoc.id, ...studentDoc.data() };
+                    const emailToLogin = studentData.email;
+
+                    // 2. Autenticar con Firebase Auth usando email + contraseña
+                    await signInWithEmailAndPassword(auth, emailToLogin, pass);
+
+                    // 3. Credenciales correctas — preparar 2FA
+                    tempStudentFor2FA = studentData;
+
+                    // Si ya existe un código en sessionStorage, ir directo
+                    const codigoExistente = sessionStorage.getItem('2fa');
+                    if (codigoExistente) {
+                        router('verification');
+                        return;
+                    }
+
+                    // Primera vez: generar y enviar código 2FA por EmailJS
+                    const code = Math.floor(100000 + Math.random() * 900000).toString();
+                    sessionStorage.setItem('2fa', code);
+
+                    btn.textContent = 'Enviando código...';
+                    await emailjs.send("service_5cvo5ap", "template_h9mankr", {
+                        nombre: tempStudentFor2FA.nombre,
+                        email: tempStudentFor2FA.email,
+                        codigo: code
+                    });
+                    router('verification');
+
+                } catch (err) {
+                    console.error(err);
+                    sessionStorage.removeItem('2fa');
+                    let errorMsg = 'Credenciales incorrectas.';
+                    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+                        errorMsg = 'Contraseña incorrecta.';
+                    } else if (err.code === 'auth/too-many-requests') {
+                        errorMsg = 'Demasiados intentos. Intenta más tarde o recupera tu contraseña.';
+                    } else if (err.code === 'auth/user-not-found') {
+                        errorMsg = 'No existe cuenta con esa matrícula.';
+                    }
+                    msgBox.innerText = errorMsg;
                     msgBox.classList.remove('hidden');
                     btn.disabled = false;
                     btn.textContent = 'Ingresar';
+                }
+            };
+        }
+
+        // RECUPERAR CONTRASEÑA — usa Firebase Auth nativo
+        function bindForgotPassword() {
+            document.getElementById('forgotForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('forgotBtn');
+                const msgBox = document.getElementById('forgotMsg');
+                const email = document.getElementById('forgotEmail').value.trim();
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Enviando...';
+                msgBox.classList.add('hidden');
+
+                try {
+                    // Firebase Auth envía el correo de recuperación automáticamente
+                    await sendPasswordResetEmail(auth, email);
+
+                    msgBox.textContent = '✓ Correo enviado. Revisa tu bandeja de entrada (y spam).';
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
+                    msgBox.classList.remove('hidden');
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Correo enviado';
+
+                } catch (err) {
+                    console.error(err);
+                    let errorMsg = 'Error al enviar el correo.';
+                    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+                        // Por seguridad mostramos el mismo mensaje aunque el correo no exista
+                        msgBox.textContent = '✓ Si ese correo está registrado, recibirás las instrucciones.';
+                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
+                        msgBox.classList.remove('hidden');
+                        btn.innerHTML = '<i class="ph ph-check-circle"></i> Listo';
+                        return;
+                    } else if (err.code === 'auth/too-many-requests') {
+                        errorMsg = 'Demasiados intentos. Espera un momento e intenta de nuevo.';
+                    }
+                    msgBox.textContent = errorMsg;
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                    msgBox.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Enviar correo de recuperación';
                 }
             };
         }
@@ -1133,6 +1345,7 @@
             else if (tab === 'students') await renderAdminStudents(content);
             else if (tab === 'classes') await renderAdminClasses(content);
             else if (tab === 'attendance') await renderAdminAttendance(content);
+            else if (tab === 'preregistros') await renderAdminPreregistros(content);
         };
 
         // --- TAB: ESTADÍSTICAS ---
@@ -1462,6 +1675,153 @@
                 if (adminLink) adminLink.classList.add('hidden');
             }
         }
+
+        // --- TAB: PRE-REGISTROS ---
+        async function renderAdminPreregistros(content) {
+            const snap = await getDocs(getCol('preregistros'));
+            const lista = [];
+            snap.forEach(doc => lista.push({ id: doc.id, ...doc.data() }));
+
+            content.innerHTML = `
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Lista de pre-registros -->
+                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
+                            <h3 class="font-bold text-lg"><i class="ph ph-user-list"></i> Alumnos Pre-registrados (${lista.length})</h3>
+                            <input type="text" placeholder="Buscar..." oninput="filterPreregTable(this.value)"
+                                class="border rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:border-slate-400">
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Nombre</th>
+                                        <th class="px-4 py-3 text-left">Matrícula</th>
+                                        <th class="px-4 py-3 text-left">Carrera</th>
+                                        <th class="px-4 py-3 text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="preregTableBody">
+                                    ${lista.length === 0
+                                        ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">No hay alumnos pre-registrados.</td></tr>'
+                                        : lista.map(a => `
+                                        <tr class="border-t hover:bg-slate-50 transition prereg-row"
+                                            data-nombre="${(a.nombre||'').toLowerCase()}"
+                                            data-mat="${(a.matricula||'').toLowerCase()}">
+                                            <td class="px-4 py-3 font-medium">${a.nombre || '—'}</td>
+                                            <td class="px-4 py-3 text-gray-600">${a.matricula || '—'}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                                    ${a.carrera || '—'}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
+                                                <button onclick="deletePreregistro('${a.id}', '${(a.nombre||'').replace(/'/g,'')}')"
+                                                    class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>`).join('')
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Formulario agregar pre-registro -->
+                    <div class="bg-white rounded-2xl border shadow-sm p-6">
+                        <h3 class="font-bold text-lg mb-4"><i class="ph ph-user-plus"></i> Agregar Alumno al Catálogo</h3>
+                        <form id="addPreregForm" class="space-y-4">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase">Nombre Completo</label>
+                                <input type="text" id="preregNombre" required placeholder="Ej: Juan Pérez García"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase">Matrícula</label>
+                                <input type="text" id="preregMatricula" required placeholder="Ej: 2023001"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase">Carrera</label>
+                                <select id="preregCarrera" class="w-full p-3 rounded-lg border bg-gray-50">
+                                    <option>Ing. Software</option>
+                                    <option>Mecatrónica</option>
+                                    <option>Administración</option>
+                                </select>
+                            </div>
+                            <div id="preregMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
+                            <button type="submit"
+                                class="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition flex items-center justify-center gap-2">
+                                <i class="ph ph-plus"></i> Agregar al Catálogo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('addPreregForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const msgBox = document.getElementById('preregMsg');
+                const btn = e.target.querySelector('button[type="submit"]');
+                const nombre = document.getElementById('preregNombre').value.trim();
+                const matricula = document.getElementById('preregMatricula').value.trim();
+                const carrera = document.getElementById('preregCarrera').value;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
+                msgBox.classList.add('hidden');
+
+                try {
+                    // Verificar que la matrícula no esté ya en el catálogo
+                    const q = query(getCol('preregistros'), where("matricula", "==", matricula));
+                    const snap = await getDocs(q);
+                    if (!snap.empty) {
+                        msgBox.textContent = 'Esta matrícula ya está en el catálogo.';
+                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                        msgBox.classList.remove('hidden');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
+                        return;
+                    }
+
+                    await addDoc(getCol('preregistros'), { nombre, matricula, carrera });
+                    msgBox.textContent = '✓ Alumno agregado al catálogo correctamente.';
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
+                    msgBox.classList.remove('hidden');
+                    btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
+                    e.target.reset();
+                    setTimeout(() => adminTab('preregistros'), 1000);
+                } catch (err) {
+                    msgBox.textContent = 'Error: ' + err.message;
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                    msgBox.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
+                }
+            };
+        }
+
+        window.filterPreregTable = (val) => {
+            const v = val.toLowerCase();
+            document.querySelectorAll('.prereg-row').forEach(row => {
+                const nombre = row.dataset.nombre || '';
+                const mat = row.dataset.mat || '';
+                row.style.display = (nombre.includes(v) || mat.includes(v)) ? '' : 'none';
+            });
+        };
+
+        window.deletePreregistro = async (id, nombre) => {
+            if (!confirm(`¿Eliminar a "${nombre}" del catálogo? Si ya se registró, su cuenta permanece.`)) return;
+            try {
+                const { deleteDoc, doc: docRef } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                await deleteDoc(docRef(db, 'preregistros', id));
+                alert(`"${nombre}" eliminado del catálogo.`);
+                await adminTab('preregistros');
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        };
 
         window.logoutAdmin = () => {
             currentAdmin = null;
