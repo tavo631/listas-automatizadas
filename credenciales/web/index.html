@@ -15,6 +15,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script>emailjs.init("Jm1Iceor87IektLtI");</script>
+    <!-- NUEVA LIBRERÍA PARA LEER EXCEL -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -37,12 +39,18 @@
         }
 
         /* Validaciones Visuales de Formularios */
-        input:focus { outline: none; border-color: #15803d; ring: 2px; }
+        input:focus, select:focus { outline: none; border-color: #15803d; ring: 2px; }
         input:invalid:not(:placeholder-shown) { border-color: #ef4444; }
         input:valid:not(:placeholder-shown) { border-color: #22c55e; }
 
         .hidden-menu { transform: translateX(100%); transition: transform 0.3s ease-in-out; }
         .visible-menu { transform: translateX(0); transition: transform 0.3s ease-in-out; }
+
+        /* Custom Scrollbar para listas internas */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
@@ -75,7 +83,7 @@
                 <ul class="flex gap-5 text-sm font-medium text-slate-600">
                     <li><a href="#" onclick="router('home')" class="hover:text-green-700 transition nav-link" id="nav-home">Inicio</a></li>
                     <li><a href="#" onclick="router('servicios')" class="hover:text-green-700 transition nav-link" id="nav-servicios">Servicios</a></li>
-                    <li><a href="#" onclick="router('proyecto')" class="hover:text-green-700 transition nav-link text-green-700" id="nav-proyecto"></i> Proyecto</a></li>
+                    <li><a href="#" onclick="router('proyecto')" class="hover:text-green-700 transition nav-link text-green-700" id="nav-proyecto"> Proyecto</a></li>
                     <li><a href="#" onclick="router('scanner')" class="hover:text-green-700 transition nav-link" id="nav-scanner">Escáner</a></li>
                 </ul>
                 <div class="h-6 w-px bg-gray-300"></div>
@@ -133,7 +141,7 @@
                 <div class="bg-white p-2 rounded-lg shadow-sm border max-w-[90%] mb-2">¡Hola! ¿Problemas con tu credencial?</div>
             </div>
             <div class="p-2 border-t bg-white flex gap-2">
-                <input type="text" placeholder="Mensaje..." class="flex-grow text-xs border rounded p-2">
+                <input type="text" placeholder="Mensaje..." class="flex-grow text-xs border rounded p-2 focus:outline-none focus:border-green-500">
                 <button class="text-green-700"><i class="ph ph-paper-plane-right text-xl"></i></button>
             </div>
         </div>
@@ -159,17 +167,18 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, doc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // IMPORTANTE: Aquí importamos updateDoc y deleteDoc para que el CRUD de maestros y clases funcione
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc, setDoc, updateDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 1. CONFIGURACIÓN FIREBASE (Tus Credenciales Reales)
         const myFirebaseConfig = {
-  apiKey: "AIzaSyCoaX6L0SEHMfQBfbxBDYZivoFYhf1Afk8",
-  authDomain: "asistenciautn-a61f8.firebaseapp.com",
-  projectId: "asistenciautn-a61f8",
-  storageBucket: "asistenciautn-a61f8.firebasestorage.app",
-  messagingSenderId: "813249116802",
-  appId: "1:813249116802:web:35c73740597e2d477dd29b",
-  measurementId: "G-NN3YJWL7JH" 
+          apiKey: "AIzaSyCoaX6L0SEHMfQBfbxBDYZivoFYhf1Afk8",
+          authDomain: "asistenciautn-a61f8.firebaseapp.com",
+          projectId: "asistenciautn-a61f8",
+          storageBucket: "asistenciautn-a61f8.firebasestorage.app",
+          messagingSenderId: "813249116802",
+          appId: "1:813249116802:web:35c73740597e2d477dd29b",
+          measurementId: "G-NN3YJWL7JH" 
         };
 
         // Selección dinámica de entorno
@@ -191,10 +200,24 @@
         let currentUser = null; 
         let currentStudent = null;
         let tempStudentFor2FA = null;
+        let currentAdmin = null;
+        
+        // Variable Global para Constructor de Horarios
+        window.tempSchedules = [];
+
+        // NUEVAS Variables para Grid Visual de Horarios
+        window.turnos = {
+            'Matutino': ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00'],
+            'Vespertino': ['16:30', '17:20', '18:10', '19:00', '19:50', '20:40', '21:30']
+        };
+        window.gridHours = window.turnos['Matutino']; // Por defecto
+        window.gridDays = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+        window.activeGroup = null;
+        window.activeGroupId = null;
+        window.activeTurno = 'Matutino';
+        window.activeSchedule = []; // array de bloques en el grid
 
         // Helper para colecciones: Ajuste importante
-        // Si usamos tu config, las colecciones van directo a la raíz (students, classes, etc.)
-        // Si usamos el entorno de prueba del chat, van a /artifacts/...
         const getCol = (name) => {
             if (myFirebaseConfig) return collection(db, name);
             return collection(db, 'artifacts', appId, 'public', 'data', name);
@@ -206,11 +229,16 @@
                 if (typeof __initial_auth_token !== 'undefined' && !myFirebaseConfig) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    // En tu app real, quizás quieras evitar login anónimo automático
-                    // Pero para que funcione la primera vez sin usuarios, lo dejamos:
-                    // await signInAnonymously(auth); 
+                    await signInAnonymously(auth);
                 }
-            } catch (e) { console.error("Auth:", e); }
+            } catch (e) { 
+                console.error("Auth:", e); 
+                if (e.code === 'auth/admin-restricted-operation') {
+                    alert("⚠️ Acción requerida en Firebase:\n\nDebes ir a tu Consola de Firebase -> Authentication -> Sign-in method, y habilitar el proveedor 'Anónimo' (Anonymous). Esto es necesario para que el sistema funcione y cargue los datos iniciales.");
+                    // Ocultar el spinner si falla la autenticación para no dejar la pantalla bloqueada
+                    if(document.getElementById('app').innerHTML.includes('animate-spin')) router('home');
+                }
+            }
         }
 
         onAuthStateChanged(auth, async (user) => {
@@ -218,7 +246,7 @@
                 currentUser = user;
                 // Intentamos crear datos de prueba si tu BD está vacía
                 await seedDatabase();
-                router('home');
+                if(document.getElementById('app').innerHTML.includes('animate-spin')) router('home');
             } else {
                 router('home');
             }
@@ -227,17 +255,30 @@
         // Crear datos si está vacío (Seed)
         async function seedDatabase() {
             try {
-                const snap = await getDocs(getCol('classes'));
-                if (snap.empty) {
-                    console.log("Inicializando base de datos...");
-                    const classes = [
-                        { nombre: "Programación Web", hora: "07:00", total: 30 },
-                        { nombre: "Base de Datos", hora: "09:00", total: 30 },
-                        { nombre: "Inglés V", hora: "11:00", total: 30 }
-                    ];
-                    for (const c of classes) await addDoc(getCol('classes'), c);
-                    
-                    // Alumno demo por defecto
+                // Seed Profesores (NUEVO)
+                const profSnap = await getDocs(getCol('profesores'));
+                if (profSnap.empty) {
+                    await addDoc(getCol('profesores'), { nombre: "Dr. Alberto Martínez", nomina: "PRO-001", departamento: "Ingeniería de Software" });
+                    await addDoc(getCol('profesores'), { nombre: "Mtra. Silvia Castro", nomina: "PRO-002", departamento: "Ciencias Básicas" });
+                }
+
+                // Seed Clases (NUEVO CON GRUPO Y PROFESOR)
+                const classSnap = await getDocs(getCol('horarios_grupos'));
+                if (classSnap.empty) {
+                    console.log("Inicializando base de datos de horarios...");
+                    await addDoc(getCol('horarios_grupos'), {
+                        grupo: "5A",
+                        turno: "Matutino",
+                        bloques: [{
+                            id: "demo_1", dia: "Lunes", hora: "08:00", duracion: 2,
+                            materia: "Programación Web", profId: "123", profNombre: "Dr. Alberto Martínez", salon: "LAB-1"
+                        }]
+                    });
+                }
+
+                // Seed Alumno Demo
+                const studSnap = await getDocs(getCol('students'));
+                if (studSnap.empty) {
                     await addDoc(getCol('students'), {
                         nombre: "Alumno Demo",
                         matricula: "2023001",
@@ -248,7 +289,7 @@
                     });
                 }
             } catch (e) {
-                console.log("Nota: Si ves error de permisos es normal hasta que configures las reglas en Firestore console.");
+                console.log("Nota: Si ves error de permisos es normal hasta que configures las reglas en Firestore console.", e.message);
             }
         }
 
@@ -263,7 +304,7 @@
                         <div class="relative z-10">
                             <span class="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Sistema v3.0</span>
                             <h1 class="text-4xl md:text-6xl font-bold my-6">Control de Acceso <span class="text-green-400">Inteligente</span></h1>
-                            <p class="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">Plataforma segura para la gestión de identidad y asistencia académica mediante tecnología web progresiva.</p>
+                            <p class="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">Plataforma segura para la gestión de identidad, control docente y asistencia académica mediante tecnología web progresiva.</p>
                             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                                 <button onclick="router('scanner')" class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg transition transform hover:-translate-y-1"><i class="ph ph-qr-code"></i> Escanear</button>
                                 <button onclick="router('registro')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-8 py-3 rounded-xl font-bold transition">Registrarse</button>
@@ -276,17 +317,17 @@
                     
                     <div class="grid md:grid-cols-3 gap-8 mt-16 text-left">
                         <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
+                            <div class="w-12 h-12 bg-red-100 text-red-700 rounded-lg flex items-center justify-center text-2xl mb-4"><i class="ph ph-buildings"></i></div>
+                            <h3 class="font-bold text-lg mb-2">Administración Total</h3>
+                            <p class="text-gray-500 text-sm">Alta de maestros, configuración de grupos y horarios dinámicos centralizados.</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
                             <div class="w-12 h-12 bg-green-100 text-green-700 rounded-lg flex items-center justify-center text-2xl mb-4"><i class="ph ph-shield-check"></i></div>
                             <h3 class="font-bold text-lg mb-2">Seguridad 2FA</h3>
-                            <p class="text-gray-500 text-sm">Protección de identidad mediante verificación de dos pasos.</p>
+                            <p class="text-gray-500 text-sm">Protección de identidad mediante verificación de dos pasos por correo.</p>
                         </div>
                         <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
-                            <div class="w-12 h-12 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center text-2xl mb-4"><i class="ph ph-chart-pie-slice"></i></div>
-                            <h3 class="font-bold text-lg mb-2">Reportes en Vivo</h3>
-                            <p class="text-gray-500 text-sm">Visualiza tus faltas y asistencias en tiempo real.</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
-                            <div class="w-12 h-12 bg-purple-100 text-purple-700 rounded-lg flex items-center justify-center text-2xl mb-4"><i class="ph ph-devices"></i></div>
+                            <div class="w-12 h-12 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center text-2xl mb-4"><i class="ph ph-devices"></i></div>
                             <h3 class="font-bold text-lg mb-2">Multiplataforma</h3>
                             <p class="text-gray-500 text-sm">Accede desde cualquier dispositivo sin instalar nada.</p>
                         </div>
@@ -294,7 +335,7 @@
                 </div>
             `,
 
-            // 2. DOCUMENTACIÓN ESTRATÉGICA (Solicitado en el Prompt)
+            // 2. DOCUMENTACIÓN ESTRATÉGICA
             proyecto: `
                 <div class="fade-in max-w-4xl mx-auto bg-white p-8 md:p-12 rounded-2xl shadow-xl border border-gray-100">
                     <div class="border-b pb-6 mb-8 flex justify-between items-end">
@@ -308,7 +349,6 @@
                     </div>
 
                     <div class="space-y-10">
-                        <!-- Análisis Organizacional -->
                         <section>
                             <h3 class="flex items-center gap-2 text-xl font-bold text-green-700 mb-4"><i class="ph ph-buildings"></i> 1. Análisis del Modelo Organizacional</h3>
                             <div class="bg-slate-50 p-6 rounded-xl text-slate-700 space-y-3">
@@ -318,7 +358,6 @@
                             </div>
                         </section>
 
-                        <!-- Análisis Entorno -->
                         <section>
                             <h3 class="flex items-center gap-2 text-xl font-bold text-green-700 mb-4"><i class="ph ph-globe"></i> 2. Análisis del Entorno</h3>
                             <ul class="list-disc list-inside space-y-2 text-slate-700 ml-4">
@@ -327,7 +366,6 @@
                             </ul>
                         </section>
 
-                        <!-- Plan Estratégico -->
                         <section>
                             <h3 class="flex items-center gap-2 text-xl font-bold text-green-700 mb-4"><i class="ph ph-strategy"></i> 3. Plan Estratégico</h3>
                             <div class="grid md:grid-cols-2 gap-6">
@@ -345,12 +383,11 @@
                                 <ul class="list-disc list-inside text-sm text-slate-600">
                                     <li>Automatización 100% (Cero Papel).</li>
                                     <li>Seguridad Total con Verificación 2FA.</li>
-                                    <li>Reducir tiempo de toma de asistencia a < 2 minutos.</li>
+                                    <li>Gestión centralizada de grupos, horarios y docentes por Rectoría.</li>
                                 </ul>
                             </div>
                         </section>
 
-                        <!-- Recursos y Responsables (Datos del Equipo) -->
                         <section class="border-t pt-8">
                             <h3 class="flex items-center gap-2 text-xl font-bold text-slate-900 mb-6"><i class="ph ph-users-three"></i> Equipo de Desarrollo</h3>
                             <div class="grid md:grid-cols-2 gap-6">
@@ -376,7 +413,7 @@
                 </div>
             `,
 
-            // 3. REGISTRO (Con Validación Regex + Confirmación de Contraseña)
+            // 3. REGISTRO
             registro: `
                 <div class="fade-in max-w-md mx-auto mt-10">
                     <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
@@ -522,7 +559,7 @@
                 </div>
             `,
 
-            // 4. LOGIN (Paso 1)
+            // 4. LOGIN
             login: `
                 <div class="fade-in max-w-sm mx-auto mt-16">
                     <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
@@ -564,7 +601,7 @@
                 </div>
             `,
 
-            // 6. DASHBOARD (Gráficas)
+            // 6. DASHBOARD ALUMNO
             dashboard: `
                 <div class="fade-in max-w-6xl mx-auto">
                     <div id="dashHeader" class="bg-white p-6 rounded-2xl shadow-sm border mb-8 flex items-center gap-4">
@@ -580,35 +617,32 @@
                                 <div class="text-3xl font-bold mb-1">95%</div>
                                 <div class="text-green-100 text-sm">Asistencia Global</div>
                             </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border">
-                                <h3 class="font-bold mb-4">Próximas Clases</h3>
-                                <ul class="space-y-3 text-sm">
-                                    <li class="flex justify-between border-b pb-2"><span>Prog. Web</span> <span class="text-gray-500">07:00 AM</span></li>
-                                    <li class="flex justify-between border-b pb-2"><span>Base de Datos</span> <span class="text-gray-500">09:00 AM</span></li>
-                                </ul>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border text-center py-6">
+                                <i class="ph ph-qr-code text-5xl text-green-600 mb-2 opacity-70"></i>
+                                <h3 class="font-bold mb-3">Registrar Asistencia</h3>
+                                <button onclick="router('scanner')" class="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg font-bold shadow transition"><i class="ph ph-camera"></i> Abrir Escáner</button>
                             </div>
                         </div>
                     </div>
                     <div class="text-center mt-8">
-                        <button onclick="logout()" class="text-red-500 font-medium hover:underline">Cerrar Sesión</button>
+                        <button onclick="logout()" class="text-red-500 font-medium hover:underline flex items-center gap-1 justify-center mx-auto"><i class="ph ph-sign-out"></i> Cerrar Sesión</button>
                     </div>
                 </div>
             `,
 
             // 7. ESCÁNER
             scanner: `
-                <div class="fade-in max-w-md mx-auto text-center">
+                <div class="fade-in max-w-md mx-auto text-center mt-8">
                     <h2 class="text-2xl font-bold mb-6">Escáner de Asistencia</h2>
-                    <div class="bg-black rounded-2xl overflow-hidden relative h-80 mb-6 group cursor-pointer shadow-2xl" onclick="document.getElementById('fileInput').click()">
-                        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1555421689-d68471e189f2?auto=format&fit=crop&q=80')] bg-cover opacity-50"></div>
+                    <div class="bg-slate-900 rounded-3xl overflow-hidden relative h-80 mb-6 group cursor-pointer shadow-xl border-4 border-slate-800" onclick="document.getElementById('fileInput').click()">
                         <div class="scan-line z-10"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-center z-20 text-white">
-                            <i class="ph ph-camera text-4xl mb-2"></i>
-                            <span class="text-sm font-medium">Toque para escanear QR</span>
+                            <i class="ph ph-camera text-5xl mb-3 text-green-400"></i>
+                            <span class="text-sm font-medium">Toque para simular escaneo de QR</span>
                         </div>
                         <input type="file" id="fileInput" class="hidden">
                     </div>
-                    <div id="scanRes" class="hidden p-4 bg-green-100 text-green-800 rounded-xl font-bold">
+                    <div id="scanRes" class="hidden p-4 bg-green-50 text-green-800 rounded-xl font-bold border border-green-200">
                         <i class="ph ph-check-circle"></i> Asistencia Registrada
                     </div>
                 </div>
@@ -622,7 +656,7 @@
                         <div class="bg-white p-8 rounded-2xl shadow-sm border hover:-translate-y-2 transition duration-300">
                             <div class="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6"><i class="ph ph-scan"></i></div>
                             <h3 class="text-xl font-bold mb-3">Lectura Digital</h3>
-                            <p class="text-gray-500">Reconocimiento OCR avanzado para extracción de datos de credenciales físicas.</p>
+                            <p class="text-gray-500">Reconocimiento avanzado para extracción de datos de códigos QR y credenciales.</p>
                         </div>
                         <div class="bg-white p-8 rounded-2xl shadow-sm border hover:-translate-y-2 transition duration-300">
                             <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-6"><i class="ph ph-database"></i></div>
@@ -631,8 +665,8 @@
                         </div>
                         <div class="bg-white p-8 rounded-2xl shadow-sm border hover:-translate-y-2 transition duration-300">
                             <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-3xl mb-6"><i class="ph ph-chart-bar"></i></div>
-                            <h3 class="text-xl font-bold mb-3">Analítica</h3>
-                            <p class="text-gray-500">Reportes detallados de asistencia para alumnos y docentes.</p>
+                            <h3 class="text-xl font-bold mb-3">Analítica Administrativa</h3>
+                            <p class="text-gray-500">Reportes detallados de asistencia, maestros y control de grupos.</p>
                         </div>
                     </div>
                 </div>
@@ -645,9 +679,10 @@
                     <ul class="space-y-4 text-lg">
                         <li class="pl-4 border-l-4 border-green-500 font-bold"><a href="#" onclick="router('home')">Inicio</a></li>
                         <li class="pl-4 border-l-4 border-gray-300 ml-4"><a href="#" onclick="router('servicios')">Servicios</a></li>
-                        <li class="pl-4 border-l-4 border-gray-300 ml-4"><a href="#" onclick="router('registro')">Registro</a></li>
+                        <li class="pl-4 border-l-4 border-gray-300 ml-4"><a href="#" onclick="router('registro')">Registro Alumno</a></li>
                         <li class="pl-4 border-l-4 border-gray-300 ml-4"><a href="#" onclick="router('scanner')">Escáner</a></li>
                         <li class="pl-4 border-l-4 border-blue-300 ml-4"><a href="#" onclick="router('login')">Portal Alumno (Login)</a></li>
+                        <li class="pl-4 border-l-4 border-red-300 ml-4 font-bold text-red-700"><a href="#" onclick="router('adminLogin')">Portal Administrativo / Rector</a></li>
                         <li class="pl-4 border-l-4 border-purple-300 ml-4 font-bold text-green-700"><a href="#" onclick="router('proyecto')">Documentación del Proyecto</a></li>
                     </ul>
                 </div>
@@ -660,17 +695,17 @@
                     <form onsubmit="event.preventDefault(); alert('Mensaje enviado'); router('home');">
                          <div class="mb-4">
                             <label class="block text-sm font-bold mb-1">Nombre</label>
-                            <input type="text" required class="w-full p-2 border rounded">
+                            <input type="text" required class="w-full p-2 border rounded focus:border-green-500 outline-none">
                          </div>
                          <div class="mb-4">
                             <label class="block text-sm font-bold mb-1">Correo</label>
-                            <input type="email" required class="w-full p-2 border rounded">
+                            <input type="email" required class="w-full p-2 border rounded focus:border-green-500 outline-none">
                          </div>
                          <div class="mb-4">
                             <label class="block text-sm font-bold mb-1">Mensaje</label>
-                            <textarea required class="w-full p-2 border rounded h-24"></textarea>
+                            <textarea required class="w-full p-2 border rounded h-24 focus:border-green-500 outline-none"></textarea>
                          </div>
-                         <button class="w-full bg-slate-900 text-white py-2 rounded font-bold">Enviar</button>
+                         <button class="w-full bg-slate-900 text-white py-2 rounded font-bold hover:bg-slate-800 transition">Enviar</button>
                     </form>
                 </div>
             `,
@@ -681,21 +716,12 @@
                     <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                         <div class="text-center mb-8">
                             <div class="inline-block p-3 bg-red-100 text-red-600 rounded-full mb-4"><i class="ph ph-shield-star text-3xl"></i></div>
-                            <h2 class="text-2xl font-bold">Portal Administrador</h2>
-                            <p class="text-gray-400 text-sm mt-1">Acceso restringido</p>
+                            <h2 class="text-2xl font-bold">Portal Rectoría</h2>
+                            <p class="text-gray-400 text-sm mt-1">Acceso maestro (Simulación)</p>
                         </div>
                         <form id="adminLoginForm" class="space-y-4">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Usuario</label>
-                                <input type="text" id="adminUser" required placeholder="usuario@utn.edu.mx" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Contraseña</label>
-                                <input type="password" id="adminPass" required placeholder="Contraseña" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div id="adminLoginMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600"></div>
-                            <button type="submit" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition flex items-center justify-center gap-2">
-                                <i class="ph ph-sign-in"></i> Ingresar como Admin
+                            <button type="submit" class="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-lg">
+                                <i class="ph ph-buildings"></i> Entrar al Panel de Control
                             </button>
                         </form>
                         <div class="mt-4 text-center">
@@ -705,17 +731,17 @@
                 </div>
             `,
 
-            // 12. PANEL ADMIN
+            // 12. PANEL ADMIN (NUEVA VERSIÓN COMPLETA CON DOCENTES Y GRUPOS)
             adminPanel: `
                 <div class="fade-in max-w-7xl mx-auto">
                     <!-- Header Admin -->
-                    <div class="bg-gradient-to-r from-slate-900 to-red-900 rounded-2xl p-6 text-white mb-8 flex items-center justify-between">
+                    <div class="bg-gradient-to-r from-slate-900 to-red-900 rounded-2xl p-6 text-white mb-8 flex items-center justify-between shadow-lg">
                         <div class="flex items-center gap-4">
                             <div class="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center text-2xl font-bold">
-                                <i class="ph ph-shield-star"></i>
+                                <i class="ph ph-buildings text-white"></i>
                             </div>
                             <div>
-                                <h2 class="text-2xl font-bold">Panel de Administración</h2>
+                                <h2 class="text-2xl font-bold">Administración Central</h2>
                                 <p id="adminWelcome" class="text-red-200 text-sm">Cargando...</p>
                             </div>
                         </div>
@@ -724,21 +750,24 @@
                         </button>
                     </div>
 
-                    <!-- Tabs de navegación -->
-                    <div class="flex gap-2 mb-6 flex-wrap">
-                        <button onclick="adminTab('stats')" id="tab-stats" class="admin-tab active-tab px-5 py-2 rounded-lg text-sm font-bold bg-slate-900 text-white transition">
+                    <!-- Tabs de navegación Reordenados -->
+                    <div class="flex gap-2 mb-6 flex-wrap pb-2 overflow-x-auto">
+                        <button onclick="adminTab('stats')" id="tab-stats" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-chart-pie"></i> Estadísticas
                         </button>
-                        <button onclick="adminTab('students')" id="tab-students" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
+                        <button onclick="adminTab('profesores')" id="tab-profesores" class="admin-tab active-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-slate-900 text-white transition whitespace-nowrap">
+                            <i class="ph ph-chalkboard-teacher"></i> Docentes
+                        </button>
+                        <button onclick="adminTab('classes')" id="tab-classes" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
+                            <i class="ph ph-calendar-grid text-blue-600"></i> Editor de Horarios
+                        </button>
+                        <button onclick="adminTab('students')" id="tab-students" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-users"></i> Alumnos
                         </button>
-                        <button onclick="adminTab('classes')" id="tab-classes" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
-                            <i class="ph ph-books"></i> Clases
-                        </button>
-                        <button onclick="adminTab('attendance')" id="tab-attendance" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
+                        <button onclick="adminTab('attendance')" id="tab-attendance" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-clipboard-text"></i> Asistencias
                         </button>
-                        <button onclick="adminTab('preregistros')" id="tab-preregistros" class="admin-tab px-5 py-2 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition">
+                        <button onclick="adminTab('preregistros')" id="tab-preregistros" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-user-plus"></i> Pre-registros
                         </button>
                     </div>
@@ -767,47 +796,33 @@
         window.router = async (route) => {
             const app = document.getElementById('app');
             
-            // Navegación Básica
-            if (templates[route]) {
-                app.innerHTML = templates[route];
-            } else {
-                app.innerHTML = templates['404'];
-            }
+            if (templates[route]) app.innerHTML = templates[route];
+            else app.innerHTML = templates['404'];
 
-            // Actualizar estado del Nav
             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('text-green-700', 'font-bold'));
             if(document.getElementById(`nav-${route}`)) document.getElementById(`nav-${route}`).classList.add('text-green-700', 'font-bold');
 
-            // Lógica Específica por Vista
             if (route === 'dashboard') {
                 if (!currentStudent) { router('login'); return; }
                 renderDashboard();
-            } else if (route === 'login') {
-                bindLogin();
-            } else if (route === 'registro') {
-                bindRegister();
-            } else if (route === 'verifyEmail') {
+            } else if (route === 'login') bindLogin();
+            else if (route === 'registro') bindRegister();
+            else if (route === 'verifyEmail') {
                 if (!pendingRegisterData) { router('registro'); return; }
                 bindVerifyEmail();
-            } else if (route === 'forgotPassword') {
-                bindForgotPassword();
-            } else if (route === 'verification') {
-                bind2FA();
-            } else if (route === 'scanner') {
-                bindScanner();
-            } else if (route === 'adminLogin') {
-                bindAdminLogin();
-            } else if (route === 'adminPanel') {
+            } else if (route === 'forgotPassword') bindForgotPassword();
+            else if (route === 'verification') bind2FA();
+            else if (route === 'scanner') bindScanner();
+            else if (route === 'adminLogin') bindAdminLogin();
+            else if (route === 'adminPanel') {
                 if (!currentAdmin) { router('adminLogin'); return; }
                 renderAdminPanel();
             }
         };
 
         // ==========================================
-        //  LÓGICA DE NEGOCIO (Controladores)
+        //  LÓGICA DE NEGOCIO (Controladores Auth)
         // ==========================================
-
-        // 1. REGISTRO
         let pendingRegisterData = null;
         let emailVerifyCode = null;
 
@@ -829,12 +844,11 @@
             msgBox.classList.add('hidden');
 
             try {
-                // Buscar en el catálogo de pre-registros
                 const q = query(getCol('preregistros'), where("matricula", "==", matricula));
                 const snap = await getDocs(q);
 
                 if (snap.empty) {
-                    msgBox.textContent = 'Matrícula no encontrada. Contacta al administrador para ser agregado al sistema.';
+                    msgBox.textContent = 'Matrícula no encontrada en catálogo.';
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                     msgBox.classList.remove('hidden');
                     btnBuscar.disabled = false;
@@ -842,7 +856,6 @@
                     return;
                 }
 
-                // Verificar que no esté ya registrado como usuario
                 const qReg = query(getCol('students'), where("matricula", "==", matricula));
                 const snapReg = await getDocs(qReg);
                 if (!snapReg.empty) {
@@ -854,17 +867,14 @@
                     return;
                 }
 
-                // Encontrado: autocompletar y mostrar formulario
                 const alumno = snap.docs[0].data();
                 document.getElementById('regNombre').value = alumno.nombre;
                 document.getElementById('regMatricula').value = alumno.matricula;
                 document.getElementById('regCarrera').value = alumno.carrera;
                 document.getElementById('alumnoVerificadoNombre').textContent = alumno.nombre;
 
-                // Mostrar formulario y ocultar buscador
                 document.getElementById('regForm').classList.remove('hidden');
                 document.getElementById('stepBuscar').classList.add('hidden');
-
             } catch (err) {
                 msgBox.textContent = 'Error al buscar: ' + err.message;
                 msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
@@ -874,7 +884,7 @@
             }
         };
 
-        // Función hash SHA-256 usando Web Crypto API (nativa del navegador, sin librerías)
+        // Hash SHA-256
         async function hashPassword(password) {
             const encoder = new TextEncoder();
             const data = encoder.encode(password);
@@ -889,7 +899,6 @@
             const matchMsg = document.getElementById('passMatchMsg');
             const btn = document.getElementById('regBtn');
 
-            // ── Reglas visuales en tiempo real ──
             const rules = {
                 length:  { el: document.getElementById('rule-length'),  test: v => v.length >= 8 },
                 lower:   { el: document.getElementById('rule-lower'),   test: v => /[a-z]/.test(v) },
@@ -929,7 +938,6 @@
                 return allValid;
             }
 
-            // ── Confirmar contraseña ──
             function checkMatch() {
                 if (!confirmInput.value) { matchMsg.classList.add('hidden'); return; }
                 if (passInput.value === confirmInput.value) {
@@ -942,7 +950,6 @@
                 matchMsg.classList.remove('hidden');
             }
 
-            // ── Habilitar botón solo cuando todo es válido ──
             function syncBtn() {
                 const allRulesOk = checkPasswordRules();
                 const passwordsMatch = passInput.value === confirmInput.value && confirmInput.value.length > 0;
@@ -960,7 +967,6 @@
             passInput.addEventListener('input', () => { checkPasswordRules(); checkMatch(); syncBtn(); });
             confirmInput.addEventListener('input', () => { checkMatch(); syncBtn(); });
 
-            // ── Submit ──
             document.getElementById('regForm').onsubmit = async (e) => {
                 e.preventDefault();
                 const msgBox = document.getElementById('regMsg');
@@ -970,41 +976,15 @@
                 const email = document.getElementById('regEmail').value.trim();
                 const carrera = document.getElementById('regCarrera').value.trim();
                 const pass = document.getElementById('regPass').value;
-                const passConfirm = document.getElementById('regPassConfirm').value;
-
-                if (pass !== passConfirm) {
-                    msgBox.textContent = 'Las contraseñas no coinciden.';
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
-                    msgBox.classList.remove('hidden');
-                    return;
-                }
 
                 btn.disabled = true;
                 btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Enviando código...';
                 msgBox.classList.add('hidden');
 
                 try {
-                    // Verificar matrícula duplicada
-                    const q = query(getCol('students'), where("matricula", "==", matricula));
-                    const snap = await getDocs(q);
-                    if (!snap.empty) {
-                        msgBox.textContent = 'Esta matrícula ya está registrada.';
-                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
-                        msgBox.classList.remove('hidden');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Enviar Código de Verificación';
-                        return;
-                    }
-
-                    // Generar hash SHA-256 de la contraseña antes de guardarla
                     const passwordHash = await hashPassword(pass);
-
-                    // Generar código de 6 dígitos
                     emailVerifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-                    // Guardar datos pendientes
-                    // rawPassword: para crear usuario en Firebase Auth (solo se usa una vez, no se guarda en Firestore)
-                    // password: hash SHA-256 que SÍ se guarda en Firestore como respaldo
                     pendingRegisterData = {
                         nombre, matricula, email, carrera,
                         rawPassword: pass,
@@ -1012,18 +992,16 @@
                         foto: `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&background=15803d&color=fff`
                     };
 
-                    // Enviar correo con EmailJS
-                    await emailjs.send("service_5cvo5ap", "template_ms1sicu", {
-                        nombre: nombre,
-                        email: email,
-                        codigo: emailVerifyCode
-                    });
+                    console.log("Código Registro (Demo):", emailVerifyCode);
+                    try {
+                        await emailjs.send("service_5cvo5ap", "template_ms1sicu", {
+                            nombre: nombre, email: email, codigo: emailVerifyCode
+                        });
+                    } catch(ex) { console.log("EmailJS omitido."); }
 
                     router('verifyEmail');
-
                 } catch (err) {
-                    console.error(err);
-                    msgBox.textContent = 'Error al enviar el correo. Verifica tu conexión.';
+                    msgBox.textContent = 'Error al procesar: ' + err.message;
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                     msgBox.classList.remove('hidden');
                     btn.disabled = false;
@@ -1040,7 +1018,7 @@
                 const inputCode = document.getElementById('codeVerifyEmail').value.trim();
 
                 if (inputCode !== emailVerifyCode) {
-                    msgBox.textContent = '✗ Código incorrecto. Intenta de nuevo.';
+                    msgBox.textContent = '✗ Código incorrecto.';
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                     msgBox.classList.remove('hidden');
                     return;
@@ -1051,44 +1029,21 @@
                 msgBox.classList.remove('hidden');
 
                 try {
-                    // 1. Crear usuario en Firebase Authentication
-                    const userCredential = await createUserWithEmailAndPassword(
-                        auth,
-                        pendingRegisterData.email,
-                        pendingRegisterData.rawPassword  // contraseña original (solo para Firebase Auth)
-                    );
-                    const uid = userCredential.user.uid;
-
-                    // 2. Guardar perfil en Firestore usando el UID como ID del documento
-                    //    No guardamos la contraseña — Firebase Auth la maneja de forma segura
+                    const userCredential = await createUserWithEmailAndPassword(auth, pendingRegisterData.email, pendingRegisterData.rawPassword);
                     const { rawPassword, ...perfilSinPassword } = pendingRegisterData;
-                    await setDoc(doc(db, 'students', uid), perfilSinPassword);
+                    await setDoc(doc(db, 'students', userCredential.user.uid), perfilSinPassword);
 
                     pendingRegisterData = null;
                     emailVerifyCode = null;
 
-                    setTimeout(() => {
-                        alert('✅ ¡Registro exitoso! Ya puedes iniciar sesión.');
-                        router('login');
-                    }, 800);
-
+                    setTimeout(() => { alert('✅ ¡Registro exitoso!'); router('login'); }, 800);
                 } catch (err) {
-                    console.error(err);
-                    let errorMsg = 'Error al crear la cuenta.';
-                    if (err.code === 'auth/email-already-in-use') {
-                        errorMsg = 'Este correo ya tiene una cuenta. Intenta iniciar sesión.';
-                    } else if (err.code === 'auth/invalid-email') {
-                        errorMsg = 'El correo no es válido.';
-                    } else if (err.code === 'auth/weak-password') {
-                        errorMsg = 'La contraseña es muy débil.';
-                    }
-                    msgBox.textContent = errorMsg;
+                    msgBox.textContent = 'Error: ' + err.message;
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                 }
             };
         }
 
-        // 2. LOGIN & 2FA
         function bindLogin() {
             document.getElementById('loginForm').onsubmit = async (e) => {
                 e.preventDefault();
@@ -1102,7 +1057,6 @@
                 msgBox.classList.add('hidden');
 
                 try {
-                    // 1. Buscar el correo asociado a esa matrícula en Firestore
                     const q = query(getCol('students'), where("matricula", "==", mat));
                     const snap = await getDocs(q);
 
@@ -1116,45 +1070,24 @@
 
                     const studentDoc = snap.docs[0];
                     const studentData = { id: studentDoc.id, ...studentDoc.data() };
-                    const emailToLogin = studentData.email;
 
-                    // 2. Autenticar con Firebase Auth usando email + contraseña
-                    await signInWithEmailAndPassword(auth, emailToLogin, pass);
+                    await signInWithEmailAndPassword(auth, studentData.email, pass);
 
-                    // 3. Credenciales correctas — preparar 2FA
                     tempStudentFor2FA = studentData;
-
-                    // Si ya existe un código en sessionStorage, ir directo
-                    const codigoExistente = sessionStorage.getItem('2fa');
-                    if (codigoExistente) {
-                        router('verification');
-                        return;
-                    }
-
-                    // Primera vez: generar y enviar código 2FA por EmailJS
                     const code = Math.floor(100000 + Math.random() * 900000).toString();
                     sessionStorage.setItem('2fa', code);
+                    
+                    console.log("Código Login (Demo):", code);
+                    try {
+                        await emailjs.send("service_5cvo5ap", "template_h9mankr", {
+                            nombre: tempStudentFor2FA.nombre, email: tempStudentFor2FA.email, codigo: code
+                        });
+                    } catch(ex) {}
 
-                    btn.textContent = 'Enviando código...';
-                    await emailjs.send("service_5cvo5ap", "template_h9mankr", {
-                        nombre: tempStudentFor2FA.nombre,
-                        email: tempStudentFor2FA.email,
-                        codigo: code
-                    });
                     router('verification');
-
                 } catch (err) {
-                    console.error(err);
                     sessionStorage.removeItem('2fa');
-                    let errorMsg = 'Credenciales incorrectas.';
-                    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-                        errorMsg = 'Contraseña incorrecta.';
-                    } else if (err.code === 'auth/too-many-requests') {
-                        errorMsg = 'Demasiados intentos. Intenta más tarde o recupera tu contraseña.';
-                    } else if (err.code === 'auth/user-not-found') {
-                        errorMsg = 'No existe cuenta con esa matrícula.';
-                    }
-                    msgBox.innerText = errorMsg;
+                    msgBox.innerText = 'Credenciales incorrectas.';
                     msgBox.classList.remove('hidden');
                     btn.disabled = false;
                     btn.textContent = 'Ingresar';
@@ -1162,7 +1095,6 @@
             };
         }
 
-        // RECUPERAR CONTRASEÑA — usa Firebase Auth nativo
         function bindForgotPassword() {
             document.getElementById('forgotForm').onsubmit = async (e) => {
                 e.preventDefault();
@@ -1175,38 +1107,21 @@
                 msgBox.classList.add('hidden');
 
                 try {
-                    // Firebase Auth envía el correo de recuperación automáticamente
                     await sendPasswordResetEmail(auth, email);
-
-                    msgBox.textContent = '✓ Correo enviado. Revisa tu bandeja de entrada (y spam).';
+                    msgBox.textContent = '✓ Correo enviado. Revisa tu bandeja de entrada.';
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
                     msgBox.classList.remove('hidden');
                     btn.innerHTML = '<i class="ph ph-check-circle"></i> Correo enviado';
-
                 } catch (err) {
-                    console.error(err);
-                    let errorMsg = 'Error al enviar el correo.';
-                    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
-                        // Por seguridad mostramos el mismo mensaje aunque el correo no exista
-                        msgBox.textContent = '✓ Si ese correo está registrado, recibirás las instrucciones.';
-                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
-                        msgBox.classList.remove('hidden');
-                        btn.innerHTML = '<i class="ph ph-check-circle"></i> Listo';
-                        return;
-                    } else if (err.code === 'auth/too-many-requests') {
-                        errorMsg = 'Demasiados intentos. Espera un momento e intenta de nuevo.';
-                    }
-                    msgBox.textContent = errorMsg;
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                    msgBox.textContent = '✓ Si el correo es válido, recibirás instrucciones.';
+                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
                     msgBox.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Enviar correo de recuperación';
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Listo';
                 }
             };
         }
 
         function bind2FA() {
-            // Mostrar el correo enmascarado al que se envió el código
             const email = tempStudentFor2FA ? tempStudentFor2FA.email : '';
             const masked = email.replace(/(.{2}).+(@.+)/, '$1***$2');
             const hint = document.getElementById('hint2fa');
@@ -1224,151 +1139,549 @@
                 } else {
                     const msg = document.getElementById('msg2fa');
                     if (msg) {
-                        msg.textContent = '✗ Código incorrecto. Intenta de nuevo.';
+                        msg.textContent = '✗ Código incorrecto.';
                         msg.classList.remove('hidden');
                     }
                 }
             };
         }
 
-        // 3. DASHBOARD & CHART.JS
+        // Dashboard
         async function renderDashboard() {
             document.getElementById('dashHeader').innerHTML = `
-                <img src="${currentStudent.foto}" class="w-16 h-16 rounded-full border-2 border-green-500">
+                <img src="${currentStudent.foto}" class="w-16 h-16 rounded-full border-2 border-green-500 shadow-sm">
                 <div>
-                    <h2 class="text-xl font-bold">Hola, ${currentStudent.nombre}</h2>
-                    <p class="text-gray-500 text-sm">${currentStudent.carrera} | ${currentStudent.matricula}</p>
+                    <h2 class="text-2xl font-bold text-slate-800">Hola, ${currentStudent.nombre.split(' ')[0]}</h2>
+                    <p class="text-gray-500 text-sm font-medium">${currentStudent.carrera} | <span class="text-slate-700">${currentStudent.matricula}</span></p>
                 </div>
             `;
-
-            // Gráfica
             const ctx = document.getElementById('attendanceChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
-                    datasets: [{
-                        label: 'Asistencias',
-                        data: [1, 1, 1, 0, 1],
-                        backgroundColor: '#16a34a'
-                    }]
-                }
-            });
+            new Chart(ctx, { type: 'bar', data: { labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'], datasets: [{ label: 'Asistencias', data: [1, 1, 1, 0, 1], backgroundColor: '#16a34a', borderRadius: 4 }] }});
         }
 
-        // 4. SCANNER
         function bindScanner() {
             document.getElementById('fileInput').onchange = () => {
                 document.getElementById('scanRes').classList.remove('hidden');
                 setTimeout(async () => {
                     if(currentStudent) {
-                        await addDoc(getCol('attendance'), {
-                            studentId: currentStudent.id,
-                            timestamp: new Date().toISOString()
-                        });
-                        alert('Asistencia registrada en la nube.');
+                        await addDoc(getCol('attendance'), { studentId: currentStudent.id, timestamp: new Date().toISOString() });
+                        alert('✅ Asistencia registrada exitosamente.');
+                        router('dashboard');
                     } else {
-                        alert('Escaneo simulado (Inicia sesión para guardar).');
+                        alert('Escaneo exitoso. (Debes iniciar sesión para que se guarde).');
                     }
                 }, 1000);
             };
         }
 
         // ==========================================
-        //  MÓDULO ADMINISTRADOR
+        //  MÓDULO ADMINISTRADOR (RECTORÍA)
         // ==========================================
-        let currentAdmin = null;
-
         function bindAdminLogin() {
             document.getElementById('adminLoginForm').onsubmit = async (e) => {
                 e.preventDefault();
-                const msgBox = document.getElementById('adminLoginMsg');
-                const btn = e.target.querySelector('button[type="submit"]');
-                const user = document.getElementById('adminUser').value.trim();
-                const pass = document.getElementById('adminPass').value;
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Verificando...';
-                msgBox.classList.add('hidden');
-
-                try {
-                    const q = query(getCol('admins'), where("email", "==", user));
-                    const snap = await getDocs(q);
-                    const passHash = await hashPassword(pass);
-                    let valid = false;
-                    snap.forEach(doc => {
-                        if (doc.data().password === passHash) {
-                            valid = true;
-                            currentAdmin = { id: doc.id, ...doc.data() };
-                        }
-                    });
-
-                    if (valid) {
-                        updateAuthUI();
-                        router('adminPanel');
-                    } else {
-                        msgBox.textContent = 'Credenciales incorrectas o no tienes permisos de administrador.';
-                        msgBox.classList.remove('hidden');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="ph ph-sign-in"></i> Ingresar como Admin';
-                    }
-                } catch (err) {
-                    msgBox.textContent = 'Error: ' + err.message;
-                    msgBox.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="ph ph-sign-in"></i> Ingresar como Admin';
-                }
+                currentAdmin = { nombre: "Rector", email: "rectoria@utn.edu.mx" };
+                updateAuthUI();
+                router('adminPanel');
             };
         }
 
         async function renderAdminPanel() {
-            document.getElementById('adminWelcome').textContent = `Bienvenido, ${currentAdmin.nombre} — ${currentAdmin.email}`;
-            await adminTab('stats');
+            document.getElementById('adminWelcome').textContent = `${currentAdmin.nombre} — ${currentAdmin.email}`;
+            await adminTab('profesores'); // Cargar pestaña de profesores por defecto
         }
 
         window.adminTab = async (tab) => {
-            // Actualizar botones
             document.querySelectorAll('.admin-tab').forEach(b => {
                 b.classList.remove('bg-slate-900', 'text-white');
-                b.classList.add('bg-white', 'border', 'hover:bg-slate-50');
+                b.classList.add('bg-white', 'text-slate-600', 'border', 'hover:bg-slate-50');
             });
             const activeBtn = document.getElementById('tab-' + tab);
             if (activeBtn) {
                 activeBtn.classList.add('bg-slate-900', 'text-white');
-                activeBtn.classList.remove('bg-white', 'border', 'hover:bg-slate-50');
+                activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'hover:bg-slate-50');
             }
 
             const content = document.getElementById('adminContent');
             content.innerHTML = '<div class="flex justify-center py-10"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900"></div></div>';
 
             if (tab === 'stats') await renderAdminStats(content);
-            else if (tab === 'students') await renderAdminStudents(content);
+            else if (tab === 'profesores') await renderAdminProfesores(content);
             else if (tab === 'classes') await renderAdminClasses(content);
+            else if (tab === 'students') await renderAdminStudents(content);
             else if (tab === 'attendance') await renderAdminAttendance(content);
             else if (tab === 'preregistros') await renderAdminPreregistros(content);
         };
 
+        // --- TAB: PROFESORES (CRUD) ---
+        async function renderAdminProfesores(content) {
+            const snap = await getDocs(getCol('profesores'));
+            const lista = [];
+            snap.forEach(doc => lista.push({ id: doc.id, ...doc.data() }));
+
+            content.innerHTML = `
+                <div class="grid lg:grid-cols-3 gap-6 items-start">
+                    <!-- Lista de Docentes -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col max-h-[700px]">
+                        <div class="p-5 border-b bg-slate-50 flex justify-between items-center">
+                            <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-chalkboard-teacher text-blue-600"></i> Plantilla Docente (${lista.length})</h3>
+                            <input type="text" placeholder="Buscar docente..." oninput="filterProfTable(this.value)" class="border rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="overflow-y-auto custom-scroll flex-grow p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${lista.length === 0 ? '<div class="col-span-2 text-center py-8 text-gray-400">No hay docentes registrados. Usa el formulario para agregar uno.</div>' : 
+                            lista.map(p => `
+                                <div class="border border-slate-200 rounded-xl p-4 hover:shadow-md transition prof-card bg-white" data-nombre="${(p.nombre||'').toLowerCase()}">
+                                    <div class="flex gap-3 items-center mb-2">
+                                        <div class="w-10 h-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm border border-blue-200">${p.nombre.charAt(0)}</div>
+                                        <div>
+                                            <h4 class="font-bold text-slate-800 leading-tight">${p.nombre}</h4>
+                                            <span class="text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded tracking-widest uppercase">${p.nomina}</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mb-3"><i class="ph ph-briefcase"></i> Área: ${p.departamento || 'No especificada'}</p>
+                                    <div class="flex gap-2 justify-end border-t pt-3 mt-2 border-slate-100">
+                                        <button onclick="editProfesor('${p.id}', '${p.nombre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${p.nomina}', '${p.departamento}')" class="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"><i class="ph ph-pencil-simple"></i> Editar</button>
+                                        <button onclick="deleteProfesor('${p.id}', '${p.nombre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" class="text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"><i class="ph ph-trash"></i> Borrar</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-6 sticky top-24">
+                        <!-- Formulario de Registro / Edición (Individual) -->
+                        <div class="bg-white rounded-2xl border shadow-sm p-6">
+                            <h3 class="font-bold text-lg mb-4 text-slate-800 border-b pb-3"><i class="ph ph-user-plus text-blue-600"></i> Registrar / Editar Maestro</h3>
+                            <form id="profForm" class="space-y-4">
+                                <input type="hidden" id="profId" value="">
+                                <div>
+                                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Nombre Completo</label>
+                                    <input type="text" id="profNombre" required placeholder="Ej: Dr. Alan Turing" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Número de Nómina</label>
+                                    <input type="text" id="profNomina" required placeholder="Ej: PRO-005" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition uppercase">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Especialidad / Área</label>
+                                    <input type="text" id="profDepto" placeholder="Ej: Ciencias de la Computación" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition">
+                                </div>
+                                <div id="profMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
+                                
+                                <button type="submit" id="profBtnSubmit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex justify-center items-center gap-2">
+                                    <i class="ph ph-floppy-disk text-lg"></i> Guardar Docente
+                                </button>
+                                <button type="button" onclick="resetProfForm()" class="w-full text-xs font-bold text-gray-400 hover:text-gray-600 mt-1 py-2 transition">Cancelar / Limpiar</button>
+                            </form>
+                        </div>
+
+                        <!-- Carga Masiva (Excel) -->
+                        <div class="bg-white rounded-2xl border shadow-sm p-6">
+                            <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3"><i class="ph ph-file-xls text-blue-600"></i> Carga Masiva (Excel)</h3>
+                            <p class="text-xs text-gray-500 mb-4">Sube un archivo .xlsx o .csv con las columnas: <b>Nombre, Nomina, Departamento</b>.</p>
+                            
+                            <input type="file" id="excelFileDocentes" accept=".xlsx, .xls, .csv" class="hidden" onchange="procesarExcelDocentes(event)">
+                            <button onclick="document.getElementById('excelFileDocentes').click()" class="w-full bg-blue-50 text-blue-700 font-bold py-3.5 rounded-xl border border-blue-200 hover:bg-blue-100 transition shadow-sm flex items-center justify-center gap-2">
+                                <i class="ph ph-upload-simple text-lg"></i> Seleccionar Archivo
+                            </button>
+                            
+                            <div id="excelProgressDocentes" class="hidden mt-4 text-sm text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('profForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('profBtnSubmit');
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
+                
+                const id = document.getElementById('profId').value;
+                const nombre = document.getElementById('profNombre').value.trim();
+                const nomina = document.getElementById('profNomina').value.trim().toUpperCase();
+                const departamento = document.getElementById('profDepto').value.trim();
+
+                try {
+                    if (id) {
+                        await updateDoc(doc(db, 'profesores', id), { nombre, nomina, departamento });
+                        alert('Datos del docente actualizados exitosamente.');
+                    } else {
+                        await addDoc(getCol('profesores'), { nombre, nomina, departamento });
+                        alert('Nuevo docente agregado a la plantilla.');
+                    }
+                    adminTab('profesores');
+                } catch(err) { alert('Error: ' + err.message); resetProfForm(); }
+            };
+        }
+
+        window.filterProfTable = (val) => {
+            const v = val.toLowerCase();
+            document.querySelectorAll('.prof-card').forEach(row => {
+                row.style.display = (row.dataset.nombre || '').includes(v) ? '' : 'none';
+            });
+        };
+
+        window.editProfesor = (id, nombre, nomina, depto) => {
+            document.getElementById('profId').value = id;
+            document.getElementById('profNombre').value = nombre;
+            document.getElementById('profNomina').value = nomina;
+            document.getElementById('profDepto').value = depto !== 'undefined' ? depto : '';
+            
+            const btn = document.getElementById('profBtnSubmit');
+            btn.innerHTML = '<i class="ph ph-pencil-simple text-lg"></i> Actualizar Docente';
+            btn.classList.replace('bg-slate-900', 'bg-blue-600');
+            btn.classList.replace('hover:bg-slate-800', 'hover:bg-blue-700');
+        };
+
+        window.resetProfForm = () => {
+            document.getElementById('profForm').reset();
+            document.getElementById('profId').value = '';
+            
+            const btn = document.getElementById('profBtnSubmit');
+            btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> Guardar Docente';
+            btn.className = 'w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex justify-center items-center gap-2';
+        };
+
+        window.deleteProfesor = async (id, nombre) => {
+            if (!confirm(`¿Estás seguro de eliminar definitivamente al docente "${nombre}"? Esta acción no afectará sus clases pasadas pero lo quitará de la plantilla.`)) return;
+            try {
+                await deleteDoc(doc(db, 'profesores', id));
+                adminTab('profesores');
+            } catch(e) { alert("Error al eliminar: " + e.message); }
+        };
+
+        // --- TAB: CLASES, GRUPOS Y HORARIOS ---
+        
+        window.loadGroupsList = async () => {
+            const list = document.getElementById('groupsList');
+            if(!list) return;
+            const snap = await getDocs(getCol('horarios_grupos'));
+            if(snap.empty) {
+                list.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Sin grupos. Crea uno arriba.</p>';
+                return;
+            }
+            let html = '';
+            snap.forEach(doc => {
+                const g = doc.data();
+                html += `<button onclick="loadGroupSchedule('${doc.id}', '${g.grupo}', '${g.turno || 'Matutino'}')" class="w-full text-left p-3 mb-1 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition font-bold text-slate-700 flex justify-between items-center group-btn" id="btn-group-${doc.id}">
+                    <span class="flex items-center gap-3">
+                        <i class="ph ph-users-three text-slate-400 text-xl"></i>
+                        <div class="leading-tight">
+                            <div class="text-sm">${g.grupo}</div>
+                            <div class="text-[10px] text-gray-400 font-normal uppercase tracking-wider">${g.turno || 'Matutino'}</div>
+                        </div>
+                    </span>
+                    <i class="ph ph-caret-right text-slate-300"></i>
+                </button>`;
+            });
+            list.innerHTML = html;
+        };
+
+        window.createNewGroup = async () => {
+            const input = document.getElementById('newGroupInput');
+            const turnoInput = document.getElementById('newGroupTurno');
+            const grupoName = input.value.trim().toUpperCase();
+            const turnoVal = turnoInput.value;
+            if(!grupoName) return;
+            
+            const snap = await getDocs(query(getCol('horarios_grupos'), where("grupo", "==", grupoName)));
+            if(!snap.empty) return alert('El grupo ya existe.');
+
+            try {
+                const docRef = await addDoc(getCol('horarios_grupos'), { grupo: grupoName, turno: turnoVal, bloques: [] });
+                input.value = '';
+                await window.loadGroupsList();
+                window.loadGroupSchedule(docRef.id, grupoName, turnoVal);
+            } catch(e) { alert(e.message); }
+        };
+
+        window.loadGroupSchedule = async (docId, grupoName, turno = 'Matutino') => {
+            document.querySelectorAll('.group-btn').forEach(b => {
+                b.classList.remove('bg-green-50', 'border-green-200', 'text-green-800');
+                b.classList.add('border-transparent', 'hover:bg-slate-50');
+            });
+            const activeBtn = document.getElementById('btn-group-'+docId);
+            if(activeBtn) {
+                activeBtn.classList.remove('hover:bg-slate-50', 'border-transparent');
+                activeBtn.classList.add('bg-green-50', 'border-green-200', 'text-green-800');
+            }
+
+            window.activeGroup = grupoName;
+            window.activeGroupId = docId;
+            window.activeTurno = turno;
+            window.gridHours = window.turnos[window.activeTurno];
+
+            document.getElementById('gridTitle').innerHTML = `Horario: <span class="text-green-600 font-extrabold">${grupoName}</span> <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500 uppercase ml-2 border border-slate-200">${window.activeTurno}</span>`;
+            document.getElementById('btnSaveSchedule').classList.remove('hidden');
+            document.getElementById('btnDeleteGroup').classList.remove('hidden');
+
+            const docSnap = await getDocs(query(getCol('horarios_grupos'), where("grupo", "==", grupoName)));
+            window.activeSchedule = docSnap.docs[0].data().bloques || [];
+            
+            window.renderScheduleGrid();
+        };
+
+        window.deleteCurrentGroup = async () => {
+            if(!confirm(`¿Estás seguro de eliminar todo el grupo ${window.activeGroup} y su horario?`)) return;
+            await deleteDoc(doc(db, 'horarios_grupos', window.activeGroupId));
+            window.activeGroup = null; window.activeGroupId = null; window.activeSchedule = [];
+            adminTab('classes');
+        };
+
+        window.renderScheduleGrid = () => {
+            let html = '<table class="w-full text-sm text-center border-collapse bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm">';
+            html += '<thead class="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider"><tr><th class="p-3 border-r border-b border-slate-200 w-24 bg-slate-200/50"><i class="ph ph-clock text-lg"></i></th>';
+            window.gridDays.forEach(d => html += `<th class="p-3 border-b border-r border-slate-200">${d}</th>`);
+            html += '</tr></thead><tbody>';
+
+            let cellMap = {};
+            window.gridHours.forEach(h => { cellMap[h] = {}; window.gridDays.forEach(d => cellMap[h][d] = null); });
+
+            window.activeSchedule.forEach(b => {
+                if(cellMap[b.hora]) {
+                    cellMap[b.hora][b.dia] = b;
+                    for(let i=1; i<b.duracion; i++) {
+                        let idx = window.gridHours.indexOf(b.hora) + i;
+                        if(idx < window.gridHours.length) cellMap[window.gridHours[idx]][b.dia] = 'spanned';
+                    }
+                }
+            });
+
+            window.gridHours.forEach(h => {
+                html += `<tr><td class="p-2 font-bold text-slate-500 bg-slate-50 border-r border-b border-slate-200 text-[11px]">${h}</td>`;
+                window.gridDays.forEach(d => {
+                    if(cellMap[h][d] === 'spanned') return;
+                    if(cellMap[h][d]) {
+                        const b = cellMap[h][d];
+                        const colorClass = "bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-200";
+                        
+                        html += `<td rowspan="${b.duracion}" class="p-3 border-r border-b border-slate-200 ${colorClass} cursor-pointer transition align-top relative group" onclick="openBlockModal('${d}', '${h}', '${b.id}')">
+                                    <div class="font-extrabold leading-tight mb-1.5 text-[11px] uppercase tracking-wide">${b.materia}</div>
+                                    <div class="text-[10px] opacity-80 mb-1.5 line-clamp-1"><i class="ph ph-chalkboard-teacher"></i> ${b.profNombre}</div>
+                                    <span class="text-[9px] font-bold bg-white/80 rounded px-1.5 py-0.5 border shadow-sm"><i class="ph ph-map-pin"></i> ${b.salon}</span>
+                                    <div class="absolute inset-0 border-2 border-transparent group-hover:border-blue-400 rounded transition pointer-events-none"></div>
+                                 </td>`;
+                    } else {
+                        html += `<td class="p-1 border-r border-b border-slate-100 hover:bg-green-50 cursor-pointer transition group" onclick="openBlockModal('${d}', '${h}')">
+                                    <div class="w-full h-full min-h-[50px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><i class="ph ph-plus-circle text-2xl text-green-400"></i></div>
+                                 </td>`;
+                    }
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('gridContainer').innerHTML = html;
+        };
+
+        window.openBlockModal = (dia, hora, blockId = null) => {
+            document.getElementById('blockModal').classList.remove('hidden');
+            document.getElementById('blockDia').value = dia;
+            document.getElementById('blockHora').value = hora;
+            document.getElementById('modalTitle').innerHTML = `<i class="ph ph-calendar-plus text-blue-600"></i> Asignar: ${dia} - ${hora}`;
+            
+            const form = document.getElementById('blockForm');
+            form.reset();
+            
+            if(blockId) {
+                const b = window.activeSchedule.find(x => x.id === blockId);
+                document.getElementById('blockId').value = b.id;
+                document.getElementById('blockMateria').value = b.materia;
+                document.getElementById('blockProfe').value = b.profId + '|' + b.profNombre;
+                document.getElementById('blockDuracion').value = b.duracion;
+                document.getElementById('blockSalon').value = b.salon;
+                document.getElementById('btnDeleteBlock').classList.remove('hidden');
+            } else {
+                document.getElementById('blockId').value = 'blk_' + Date.now();
+                document.getElementById('btnDeleteBlock').classList.add('hidden');
+            }
+
+            form.onsubmit = (e) => { e.preventDefault(); saveGridBlock(); };
+        };
+
+        window.closeBlockModal = () => document.getElementById('blockModal').classList.add('hidden');
+
+        window.saveGridBlock = () => {
+            const id = document.getElementById('blockId').value;
+            const dia = document.getElementById('blockDia').value;
+            const hora = document.getElementById('blockHora').value;
+            const materia = document.getElementById('blockMateria').value.trim();
+            const profVal = document.getElementById('blockProfe').value;
+            const [profId, profNombre] = profVal.split('|');
+            const duracion = parseInt(document.getElementById('blockDuracion').value);
+            const salon = document.getElementById('blockSalon').value.trim().toUpperCase();
+
+            // Chequeo de choques en el horario dependiente del turno
+            let hourIdx = window.gridHours.indexOf(hora);
+            for(let i=0; i<duracion; i++) {
+                if((hourIdx + i) >= window.gridHours.length) return alert('El bloque excede el horario límite de este turno.');
+                let hCheck = window.gridHours[hourIdx + i];
+                const collision = window.activeSchedule.find(b => b.dia === dia && window.gridHours.indexOf(b.hora) <= window.gridHours.indexOf(hCheck) && (window.gridHours.indexOf(b.hora) + b.duracion - 1) >= window.gridHours.indexOf(hCheck) && b.id !== id);
+                if(collision) return alert('El horario choca con la materia: ' + collision.materia);
+            }
+
+            const existingIdx = window.activeSchedule.findIndex(x => x.id === id);
+            const newBlock = { id, dia, hora, duracion, materia, profId, profNombre, salon };
+            
+            if(existingIdx >= 0) window.activeSchedule[existingIdx] = newBlock;
+            else window.activeSchedule.push(newBlock);
+
+            closeBlockModal();
+            window.renderScheduleGrid();
+            window.saveFullSchedule(true); // Autoguardado silencioso
+        };
+
+        window.deleteCurrentBlock = () => {
+            const id = document.getElementById('blockId').value;
+            window.activeSchedule = window.activeSchedule.filter(x => x.id !== id);
+            closeBlockModal();
+            window.renderScheduleGrid();
+            window.saveFullSchedule(true); // Autoguardado silencioso
+        };
+
+        window.saveFullSchedule = async (silent = false) => {
+            const btn = document.getElementById('btnSaveSchedule');
+            const originalText = btn.innerHTML;
+            if(!silent) btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
+            try {
+                await updateDoc(doc(db, 'horarios_grupos', window.activeGroupId), { bloques: window.activeSchedule });
+                if(!silent) {
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> ¡Guardado!';
+                    setTimeout(() => btn.innerHTML = originalText, 2000);
+                }
+            } catch(e) {
+                if(!silent) alert('Error al guardar: ' + e.message);
+                btn.innerHTML = originalText;
+            }
+        };
+
+        async function renderAdminClasses(content) {
+            // Cargar Opciones de Profesores
+            const profSnap = await getDocs(getCol('profesores'));
+            let profOptions = '<option value="">-- Selecciona un Docente --</option>';
+            profSnap.forEach(doc => {
+                profOptions += `<option value="${doc.id}|${doc.data().nombre}">${doc.data().nombre} (${doc.data().nomina})</option>`;
+            });
+
+            window.activeSchedule = [];
+            window.activeGroup = null;
+
+            content.innerHTML = `
+                <div class="flex flex-col lg:flex-row gap-6 relative min-h-[600px] items-start">
+                    
+                    <!-- Sidebar Grupos -->
+                    <div class="w-full lg:w-64 bg-white rounded-2xl border shadow-sm p-5 flex-shrink-0 lg:sticky lg:top-24">
+                        <h3 class="font-bold text-slate-800 mb-4 border-b pb-3 flex items-center gap-2"><i class="ph ph-users-four text-green-600 text-xl"></i> Mis Grupos</h3>
+                        
+                        <form onsubmit="event.preventDefault(); createNewGroup();" class="mb-5 border-b border-slate-100 pb-5">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nuevo Grupo</label>
+                            <input type="text" id="newGroupInput" required placeholder="Ej. 3A" class="w-full p-2.5 rounded-lg border bg-gray-50 focus:bg-white focus:border-green-500 outline-none uppercase text-sm font-bold mb-2">
+                            
+                            <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Turno</label>
+                            <select id="newGroupTurno" class="w-full p-2.5 rounded-lg border bg-gray-50 focus:bg-white focus:border-green-500 outline-none text-sm font-bold text-slate-700 mb-2">
+                                <option value="Matutino">Matutino (8:00 - 14:00)</option>
+                                <option value="Vespertino">Vespertino (16:30 - 22:20)</option>
+                            </select>
+
+                            <button type="submit" class="w-full bg-slate-900 text-white px-4 py-2.5 rounded-lg hover:bg-slate-800 transition text-sm font-bold flex justify-center items-center gap-2" title="Crear Grupo"><i class="ph ph-plus"></i> Crear</button>
+                        </form>
+
+                        <div id="groupsList" class="overflow-y-auto max-h-[400px] custom-scroll pr-1">
+                            <div class="text-center text-gray-400 py-4 text-sm"><i class="ph ph-spinner animate-spin text-xl"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Constructor Visual (Grid) -->
+                    <div class="flex-grow w-full bg-white rounded-2xl border shadow-sm p-6 relative overflow-hidden" id="gridArea">
+                        <div class="flex justify-between items-center mb-6 border-b pb-4">
+                            <h3 class="font-bold text-xl text-slate-800" id="gridTitle">Selecciona un grupo a la izquierda</h3>
+                            <div class="flex gap-2">
+                                <button id="btnDeleteGroup" class="hidden border border-red-200 text-red-500 bg-red-50 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition" onclick="deleteCurrentGroup()"><i class="ph ph-trash"></i> Eliminar Grupo</button>
+                                <button id="btnSaveSchedule" class="hidden bg-slate-900 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-slate-800 transition" onclick="saveFullSchedule()"><i class="ph ph-cloud-arrow-up"></i> Guardar Nube</button>
+                            </div>
+                        </div>
+                        
+                        <div id="gridContainer" class="overflow-x-auto pb-4">
+                            <div class="text-center py-24 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <i class="ph ph-calendar-grid text-7xl mb-4 opacity-30"></i>
+                                <p class="text-lg font-medium text-slate-500">El constructor visual aparecerá aquí.</p>
+                                <p class="text-sm mt-1">Podrás hacer clic en las celdas para agregar materias.</p>
+                            </div>
+                        </div>
+
+                        <!-- MODAL DE BLOQUE (Absoluto dentro de gridArea) -->
+                        <div id="blockModal" class="hidden absolute inset-0 bg-slate-900/50 backdrop-blur-sm z-10 flex items-center justify-center p-4">
+                            <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 w-full max-w-sm">
+                                <div class="flex justify-between items-center mb-5 border-b pb-3">
+                                    <h4 class="font-bold text-slate-800 text-lg" id="modalTitle">Asignar Materia</h4>
+                                    <button onclick="closeBlockModal()" class="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-lg"><i class="ph ph-x text-lg"></i></button>
+                                </div>
+                                <form id="blockForm" class="space-y-4">
+                                    <input type="hidden" id="blockId">
+                                    <input type="hidden" id="blockDia">
+                                    <input type="hidden" id="blockHora">
+                                    
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Nombre de la Materia</label>
+                                        <input type="text" id="blockMateria" required placeholder="Ej. Base de Datos II" class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 font-bold text-slate-800">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Docente Asignado</label>
+                                        <select id="blockProfe" required class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 text-slate-700">
+                                            ${profOptions}
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Duración</label>
+                                            <select id="blockDuracion" class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 font-bold">
+                                                <option value="1">1 Bloque</option>
+                                                <option value="2">2 Bloques</option>
+                                                <option value="3">3 Bloques</option>
+                                                <option value="4">4 Bloques</option>
+                                                <option value="5">5 Bloques</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Salón/Lab</label>
+                                            <input type="text" id="blockSalon" required placeholder="Ej. L-1" class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 uppercase font-bold">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex gap-3 pt-4 border-t mt-4">
+                                        <button type="button" id="btnDeleteBlock" onclick="deleteCurrentBlock()" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-bold hover:bg-red-100 transition"><i class="ph ph-trash text-lg"></i></button>
+                                        <button type="submit" class="flex-grow bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-lg flex justify-center items-center gap-2"><i class="ph ph-check-circle text-lg"></i> Aplicar en Horario</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+            
+            // Cargar lista de grupos
+            setTimeout(loadGroupsList, 100);
+        }
+
         // --- TAB: ESTADÍSTICAS ---
         async function renderAdminStats(content) {
-            const [studSnap, classSnap, attendSnap] = await Promise.all([
+            const [studSnap, groupSnap, attendSnap] = await Promise.all([
                 getDocs(getCol('students')),
-                getDocs(getCol('classes')),
+                getDocs(getCol('horarios_grupos')),
                 getDocs(getCol('attendance'))
             ]);
 
             const totalStudents = studSnap.size;
-            const totalClasses = classSnap.size;
+            const totalGroups = groupSnap.size;
             const totalAttendance = attendSnap.size;
             const avgAttendance = totalStudents > 0 ? Math.round((totalAttendance / (totalStudents * 5)) * 100) : 0;
 
-            // Contar asistencias por alumno para la gráfica
             const countMap = {};
             attendSnap.forEach(doc => {
                 const sid = doc.data().studentId;
                 countMap[sid] = (countMap[sid] || 0) + 1;
             });
 
-            // Obtener nombres
             const nameMap = {};
             studSnap.forEach(doc => { nameMap[doc.id] = doc.data().nombre; });
 
@@ -1378,12 +1691,8 @@
             content.innerHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
-                        <div class="text-3xl font-bold text-slate-900">${totalStudents}</div>
-                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-users"></i> Alumnos</div>
-                    </div>
-                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
-                        <div class="text-3xl font-bold text-blue-600">${totalClasses}</div>
-                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-books"></i> Clases</div>
+                        <div class="text-3xl font-bold text-blue-600">${totalGroups}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-books"></i> Grupos Activos</div>
                     </div>
                     <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
                         <div class="text-3xl font-bold text-green-600">${totalAttendance}</div>
@@ -1391,14 +1700,14 @@
                     </div>
                     <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
                         <div class="text-3xl font-bold text-purple-600">${avgAttendance}%</div>
-                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-chart-pie"></i> Promedio</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-chart-pie"></i> Promedio Global</div>
                     </div>
                 </div>
                 <div class="bg-white rounded-2xl p-6 border shadow-sm">
-                    <h3 class="font-bold text-lg mb-4">Asistencias por Alumno</h3>
+                    <h3 class="font-bold text-lg mb-4 text-slate-800">Gráfico de Asistencias por Alumno</h3>
                     ${chartLabels.length > 0
                         ? '<canvas id="adminChart" height="80"></canvas>'
-                        : '<p class="text-gray-400 text-center py-8">No hay asistencias registradas aún.</p>'
+                        : '<div class="text-center py-10 text-gray-400 font-medium"><i class="ph ph-chart-bar text-5xl mb-3 opacity-50 block mx-auto"></i>El gráfico se activará cuando existan asistencias.</div>'
                     }
                 </div>
             `;
@@ -1409,7 +1718,7 @@
                     type: 'bar',
                     data: {
                         labels: chartLabels,
-                        datasets: [{ label: 'Asistencias', data: chartData, backgroundColor: '#dc2626', borderRadius: 6 }]
+                        datasets: [{ label: 'Asistencias', data: chartData, backgroundColor: '#3b82f6', borderRadius: 6 }]
                     },
                     options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                 });
@@ -1423,48 +1732,102 @@
             snap.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
 
             content.innerHTML = `
-                <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                    <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                        <h3 class="font-bold text-lg"><i class="ph ph-users"></i> Alumnos Registrados (${students.length})</h3>
-                        <input type="text" id="searchStudent" placeholder="Buscar por nombre o matrícula..." 
-                            class="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:border-slate-400"
-                            oninput="filterStudentsTable(this.value)">
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="bg-slate-50 text-gray-500 uppercase text-xs">
-                                <tr>
-                                    <th class="px-4 py-3 text-left">Alumno</th>
-                                    <th class="px-4 py-3 text-left">Matrícula</th>
-                                    <th class="px-4 py-3 text-left">Correo</th>
-                                    <th class="px-4 py-3 text-left">Carrera</th>
-                                    <th class="px-4 py-3 text-center">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="studentsTableBody">
-                                ${students.length === 0 ? '<tr><td colspan="5" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>' :
-                                students.map(s => `
-                                    <tr class="border-t hover:bg-slate-50 transition student-row" data-name="${(s.nombre||'').toLowerCase()}" data-mat="${(s.matricula||'').toLowerCase()}">
-                                        <td class="px-4 py-3 flex items-center gap-3">
-                                            <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=15803d&color=fff'}" class="w-8 h-8 rounded-full">
-                                            <span class="font-medium">${s.nombre || '—'}</span>
-                                        </td>
-                                        <td class="px-4 py-3 text-gray-600">${s.matricula || '—'}</td>
-                                        <td class="px-4 py-3 text-gray-600">${s.email || '—'}</td>
-                                        <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">${s.carrera || '—'}</span></td>
-                                        <td class="px-4 py-3 text-center">
-                                            <button onclick="deleteStudent('${s.id}', '${(s.nombre||'').replace(/'/g,'')}')" 
-                                                class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition">
-                                                <i class="ph ph-trash"></i> Eliminar
-                                            </button>
-                                        </td>
+                <div class="grid lg:grid-cols-3 gap-6 items-start">
+                    
+                    <!-- Lista de Alumnos (Ocupa 2 columnas) -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col max-h-[700px]">
+                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3 bg-slate-50">
+                            <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-users text-blue-600"></i> Alumnos Registrados (${students.length})</h3>
+                            <input type="text" placeholder="Buscar por nombre o matrícula..." class="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500" oninput="filterStudentsTable(this.value)">
+                        </div>
+                        <div class="overflow-y-auto custom-scroll flex-grow">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm">
+                                    <tr>
+                                        <th class="px-4 py-3">Alumno</th>
+                                        <th class="px-4 py-3">Matrícula</th>
+                                        <th class="px-4 py-3">Carrera</th>
+                                        <th class="px-4 py-3 text-center">Acciones</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    ${students.length === 0 ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>' :
+                                    students.map(s => `
+                                        <tr class="border-t hover:bg-slate-50 transition student-row" data-name="${(s.nombre||'').toLowerCase()}" data-mat="${(s.matricula||'').toLowerCase()}">
+                                            <td class="px-4 py-3 flex items-center gap-3">
+                                                <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=15803d&color=fff'}" class="w-8 h-8 rounded-full border border-gray-200">
+                                                <div>
+                                                    <span class="font-bold text-slate-800 block leading-tight">${s.nombre || '—'}</span>
+                                                    <span class="text-[10px] text-gray-400 block">${s.email || '—'}</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-slate-600 font-mono">${s.matricula || '—'}</td>
+                                            <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-block">${s.carrera || '—'}</span></td>
+                                            <td class="px-4 py-3 text-center">
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <button onclick="editStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${s.matricula}', '${s.carrera}')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold transition" title="Editar Datos"><i class="ph ph-pencil-simple text-lg"></i></button>
+                                                    <button onclick="deleteStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" class="bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg text-xs font-bold transition" title="Eliminar Alumno"><i class="ph ph-trash text-lg"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+
+                    <!-- Formulario de Edición (Ocupa 1 columna) -->
+                    <div class="bg-white rounded-2xl border shadow-sm p-6 sticky top-24">
+                        <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3"><i class="ph ph-pencil-simple text-blue-600"></i> Editar Alumno</h3>
+                        <p class="text-xs text-gray-500 mb-4">Selecciona un alumno en la tabla para modificar y corregir sus datos.</p>
+                        
+                        <form id="studentEditForm" class="space-y-4">
+                            <input type="hidden" id="editStudId" value="">
+                            
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Nombre Completo</label>
+                                <input type="text" id="editStudNombre" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Matrícula</label>
+                                <input type="text" id="editStudMatricula" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Carrera</label>
+                                <input type="text" id="editStudCarrera" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                            </div>
+                            
+                            <button type="submit" id="studBtnSubmit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="ph ph-floppy-disk text-lg"></i> Guardar Cambios
+                            </button>
+                            <button type="button" onclick="resetStudentForm()" class="w-full text-xs font-bold text-gray-400 hover:text-gray-600 mt-1 py-2 transition">Cancelar Edición</button>
+                        </form>
+                    </div>
+
                 </div>
             `;
+
+            document.getElementById('studentEditForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('editStudId').value;
+                if (!id) return;
+
+                const btn = document.getElementById('studBtnSubmit');
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
+
+                const nombre = document.getElementById('editStudNombre').value.trim();
+                const matricula = document.getElementById('editStudMatricula').value.trim();
+                const carrera = document.getElementById('editStudCarrera').value.trim();
+
+                try {
+                    await updateDoc(doc(db, 'students', id), { nombre, matricula, carrera });
+                    alert('Datos del alumno corregidos y actualizados exitosamente.');
+                    adminTab('students'); // Refresca la tabla
+                } catch(err) {
+                    alert('Error al actualizar: ' + err.message);
+                    resetStudentForm();
+                }
+            };
         }
 
         window.filterStudentsTable = (val) => {
@@ -1476,124 +1839,53 @@
             });
         };
 
-        window.deleteStudent = async (id, nombre) => {
-            if (!confirm(`¿Seguro que deseas eliminar al alumno "${nombre}"? Esta acción no se puede deshacer.`)) return;
-            try {
-                const { deleteDoc, doc: docRef } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await deleteDoc(docRef(db, 'students', id));
-                alert(`Alumno "${nombre}" eliminado correctamente.`);
-                await adminTab('students');
-            } catch (err) {
-                alert('Error al eliminar: ' + err.message);
-            }
+        window.editStudent = (id, nombre, matricula, carrera) => {
+            document.getElementById('editStudId').value = id;
+            
+            // Habilitar inputs
+            const inputs = ['editStudNombre', 'editStudMatricula', 'editStudCarrera'];
+            inputs.forEach(id => document.getElementById(id).disabled = false);
+            
+            // Llenar datos
+            document.getElementById('editStudNombre').value = nombre;
+            document.getElementById('editStudMatricula').value = matricula;
+            document.getElementById('editStudCarrera').value = carrera !== 'undefined' ? carrera : '';
+            
+            // Cambiar estilo del botón
+            const btn = document.getElementById('studBtnSubmit');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> Guardar Corrección';
+            btn.classList.replace('bg-slate-900', 'bg-blue-600');
+            btn.classList.replace('hover:bg-slate-800', 'hover:bg-blue-700');
         };
 
-        // --- TAB: CLASES ---
-        async function renderAdminClasses(content) {
-            const snap = await getDocs(getCol('classes'));
-            const classes = [];
-            snap.forEach(doc => classes.push({ id: doc.id, ...doc.data() }));
+        window.resetStudentForm = () => {
+            document.getElementById('studentEditForm').reset();
+            document.getElementById('editStudId').value = '';
+            
+            // Deshabilitar inputs
+            const inputs = ['editStudNombre', 'editStudMatricula', 'editStudCarrera'];
+            inputs.forEach(id => document.getElementById(id).disabled = true);
 
-            content.innerHTML = `
-                <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Lista de clases -->
-                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                        <div class="p-5 border-b">
-                            <h3 class="font-bold text-lg"><i class="ph ph-books"></i> Clases Registradas (${classes.length})</h3>
-                        </div>
-                        <div class="divide-y">
-                            ${classes.length === 0 ? '<p class="text-gray-400 text-center py-8">No hay clases registradas.</p>' :
-                            classes.map(c => `
-                                <div class="flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition">
-                                    <div>
-                                        <p class="font-semibold">${c.nombre || '—'}</p>
-                                        <p class="text-xs text-gray-400"><i class="ph ph-clock"></i> ${c.hora || '—'} &nbsp;|&nbsp; <i class="ph ph-users"></i> ${c.total || 0} alumnos</p>
-                                    </div>
-                                    <button onclick="deleteClass('${c.id}', '${(c.nombre||'').replace(/'/g,'')}')"
-                                        class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition">
-                                        <i class="ph ph-trash"></i>
-                                    </button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
+            // Restaurar estilo del botón
+            const btn = document.getElementById('studBtnSubmit');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-floppy-disk text-lg"></i> Guardar Cambios';
+            btn.classList.replace('bg-blue-600', 'bg-slate-900');
+            btn.classList.replace('hover:bg-blue-700', 'hover:bg-slate-800');
+        };
 
-                    <!-- Formulario nueva clase -->
-                    <div class="bg-white rounded-2xl border shadow-sm p-6">
-                        <h3 class="font-bold text-lg mb-4"><i class="ph ph-plus-circle"></i> Agregar Nueva Clase</h3>
-                        <form id="addClassForm" class="space-y-4">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Nombre de la Clase</label>
-                                <input type="text" id="className" required placeholder="Ej: Programación Web" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Hora</label>
-                                <input type="time" id="classHora" required class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Total de Alumnos</label>
-                                <input type="number" id="classTotal" required min="1" placeholder="Ej: 30" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div id="classMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
-                            <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition">
-                                <i class="ph ph-plus"></i> Agregar Clase
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('addClassForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const msgBox = document.getElementById('classMsg');
-                const btn = e.target.querySelector('button[type="submit"]');
-                btn.disabled = true;
-                btn.textContent = 'Guardando...';
-                try {
-                    await addDoc(getCol('classes'), {
-                        nombre: document.getElementById('className').value.trim(),
-                        hora: document.getElementById('classHora').value,
-                        total: parseInt(document.getElementById('classTotal').value)
-                    });
-                    msgBox.textContent = '✓ Clase agregada correctamente.';
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
-                    msgBox.classList.remove('hidden');
-                    setTimeout(() => adminTab('classes'), 1000);
-                } catch (err) {
-                    msgBox.textContent = 'Error: ' + err.message;
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
-                    msgBox.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.textContent = 'Agregar Clase';
-                }
-            };
-        }
-
-        window.deleteClass = async (id, nombre) => {
-            if (!confirm(`¿Eliminar la clase "${nombre}"?`)) return;
-            try {
-                const { deleteDoc, doc: docRef } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await deleteDoc(docRef(db, 'classes', id));
-                alert(`Clase "${nombre}" eliminada.`);
-                await adminTab('classes');
-            } catch (err) {
-                alert('Error: ' + err.message);
-            }
+        window.deleteStudent = async (id, nombre) => {
+            if (!confirm(`¿Eliminar al alumno "${nombre}" de forma permanente?`)) return;
+            try { await deleteDoc(doc(db, 'students', id)); adminTab('students'); } catch (err) { alert(err.message); }
         };
 
         // --- TAB: ASISTENCIAS ---
         async function renderAdminAttendance(content) {
-            const [attendSnap, studSnap] = await Promise.all([
-                getDocs(getCol('attendance')),
-                getDocs(getCol('students'))
-            ]);
+            const [attendSnap, studSnap] = await Promise.all([ getDocs(getCol('attendance')), getDocs(getCol('students')) ]);
 
-            const nameMap = {};
-            const emailMap = {};
-            studSnap.forEach(doc => {
-                nameMap[doc.id] = doc.data().nombre;
-                emailMap[doc.id] = doc.data().matricula;
-            });
+            const names = {}; const mats = {};
+            studSnap.forEach(d => { names[d.id] = d.data().nombre; mats[d.id] = d.data().matricula; });
 
             const records = [];
             attendSnap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
@@ -1602,33 +1894,24 @@
             content.innerHTML = `
                 <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
                     <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                        <h3 class="font-bold text-lg"><i class="ph ph-clipboard-text"></i> Registro de Asistencias (${records.length})</h3>
-                        <input type="text" placeholder="Buscar por alumno..." 
-                            class="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:border-slate-400"
-                            oninput="filterAttendanceTable(this.value)">
+                        <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-clipboard-text text-blue-600"></i> Historial Global de Asistencias</h3>
+                        <input type="text" placeholder="Filtrar..." class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" oninput="document.querySelectorAll('.att-row').forEach(r => r.style.display = r.innerText.toLowerCase().includes(this.value.toLowerCase()) ? '' : 'none')">
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="bg-slate-50 text-gray-500 uppercase text-xs">
-                                <tr>
-                                    <th class="px-4 py-3 text-left">Alumno</th>
-                                    <th class="px-4 py-3 text-left">Matrícula</th>
-                                    <th class="px-4 py-3 text-left">Fecha</th>
-                                    <th class="px-4 py-3 text-left">Hora</th>
-                                </tr>
+                    <div class="overflow-x-auto max-h-[600px] overflow-y-auto custom-scroll">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm">
+                                <tr><th class="px-4 py-3">Alumno</th><th class="px-4 py-3">Matrícula</th><th class="px-4 py-3">Fecha</th><th class="px-4 py-3">Hora Validación</th></tr>
                             </thead>
-                            <tbody id="attendanceTableBody">
-                                ${records.length === 0 ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">No hay asistencias registradas.</td></tr>' :
+                            <tbody>
+                                ${records.length === 0 ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">Sin registros.</td></tr>' :
                                 records.map(r => {
-                                    const fecha = new Date(r.timestamp);
-                                    const nombre = nameMap[r.studentId] || 'Alumno desconocido';
-                                    const mat = emailMap[r.studentId] || '—';
+                                    const d = new Date(r.timestamp);
                                     return `
-                                    <tr class="border-t hover:bg-slate-50 transition attendance-row" data-name="${nombre.toLowerCase()}">
-                                        <td class="px-4 py-3 font-medium">${nombre}</td>
-                                        <td class="px-4 py-3 text-gray-600">${mat}</td>
-                                        <td class="px-4 py-3 text-gray-600">${fecha.toLocaleDateString('es-MX')}</td>
-                                        <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">${fecha.toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'})}</span></td>
+                                    <tr class="border-t hover:bg-slate-50 transition att-row">
+                                        <td class="px-4 py-3 font-bold text-slate-800">${names[r.studentId] || 'Desconocido'}</td>
+                                        <td class="px-4 py-3 text-slate-600 font-mono">${mats[r.studentId] || '—'}</td>
+                                        <td class="px-4 py-3 text-slate-600">${d.toLocaleDateString('es-MX')}</td>
+                                        <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-xs font-bold">${d.toLocaleTimeString('es-MX')}</span></td>
                                     </tr>`;
                                 }).join('')}
                             </tbody>
@@ -1638,198 +1921,256 @@
             `;
         }
 
-        window.filterAttendanceTable = (val) => {
-            const v = val.toLowerCase();
-            document.querySelectorAll('.attendance-row').forEach(row => {
-                row.style.display = (row.dataset.name || '').includes(v) ? '' : 'none';
-            });
-        };
-
-        // UTILS
-        window.logout = () => {
-            currentStudent = null;
-            currentStudent = null;
-            updateAuthUI();
-            router('home');
-        }
-
-        function updateAuthUI() {
-            const btn = document.getElementById('authButtonContainer');
-            const adminLink = document.getElementById('nav-admin-link');
-            if (currentAdmin) {
-                btn.innerHTML = `<button onclick="router('adminPanel')" class="text-red-600 font-bold text-sm flex items-center gap-1"><i class="ph ph-shield-star"></i> Panel Admin</button>`;
-                if (adminLink) adminLink.classList.remove('hidden');
-            } else if (currentStudent) {
-                btn.innerHTML = `<button onclick="router('dashboard')" class="text-green-700 font-bold text-sm">Mi Perfil</button>`;
-                if (adminLink) adminLink.classList.add('hidden');
-            } else {
-                btn.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <button onclick="router('login')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center gap-2">
-                            <i class="ph ph-sign-in"></i> Acceso
-                        </button>
-                        <button onclick="router('adminLogin')" class="border border-red-300 text-red-500 px-2 py-2 rounded-lg text-sm hover:bg-red-50 transition flex items-center" title="Portal Admin">
-                            <i class="ph ph-shield-star text-lg"></i>
-                        </button>
-                    </div>`;
-                if (adminLink) adminLink.classList.add('hidden');
-            }
-        }
-
         // --- TAB: PRE-REGISTROS ---
         async function renderAdminPreregistros(content) {
             const snap = await getDocs(getCol('preregistros'));
-            const lista = [];
-            snap.forEach(doc => lista.push({ id: doc.id, ...doc.data() }));
+            const lista = []; snap.forEach(doc => lista.push({ id: doc.id, ...doc.data() }));
 
             content.innerHTML = `
-                <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Lista de pre-registros -->
-                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                            <h3 class="font-bold text-lg"><i class="ph ph-user-list"></i> Alumnos Pre-registrados (${lista.length})</h3>
-                            <input type="text" placeholder="Buscar..." oninput="filterPreregTable(this.value)"
-                                class="border rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:border-slate-400">
+                <div class="grid md:grid-cols-2 gap-6 items-start">
+                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col max-h-[700px]">
+                        <div class="p-5 border-b bg-slate-50 flex items-center justify-between">
+                            <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-user-list text-blue-600"></i> Catálogo Permitidos (${lista.length})</h3>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs">
-                                    <tr>
-                                        <th class="px-4 py-3 text-left">Nombre</th>
-                                        <th class="px-4 py-3 text-left">Matrícula</th>
-                                        <th class="px-4 py-3 text-left">Carrera</th>
-                                        <th class="px-4 py-3 text-center">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="preregTableBody">
-                                    ${lista.length === 0
-                                        ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">No hay alumnos pre-registrados.</td></tr>'
-                                        : lista.map(a => `
-                                        <tr class="border-t hover:bg-slate-50 transition prereg-row"
-                                            data-nombre="${(a.nombre||'').toLowerCase()}"
-                                            data-mat="${(a.matricula||'').toLowerCase()}">
-                                            <td class="px-4 py-3 font-medium">${a.nombre || '—'}</td>
-                                            <td class="px-4 py-3 text-gray-600">${a.matricula || '—'}</td>
-                                            <td class="px-4 py-3">
-                                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                                                    ${a.carrera || '—'}
-                                                </span>
-                                            </td>
-                                            <td class="px-4 py-3 text-center">
-                                                <button onclick="deletePreregistro('${a.id}', '${(a.nombre||'').replace(/'/g,'')}')"
-                                                    class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition">
-                                                    <i class="ph ph-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>`).join('')
-                                    }
+                        <div class="overflow-y-auto custom-scroll flex-grow">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm"><tr><th class="px-4 py-3">Alumno</th><th class="px-4 py-3">Matrícula</th><th class="px-4 py-3 text-center">Acción</th></tr></thead>
+                                <tbody>
+                                    ${lista.length === 0 ? '<tr><td colspan="3" class="text-center py-8 text-gray-400">El catálogo está vacío.</td></tr>' : 
+                                    lista.map(a => `
+                                        <tr class="border-t hover:bg-slate-50 transition">
+                                            <td class="px-4 py-3"><p class="font-bold text-slate-800">${a.nombre}</p><p class="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 rounded inline-block mt-1">${a.carrera}</p></td>
+                                            <td class="px-4 py-3 text-slate-600 font-mono font-medium">${a.matricula}</td>
+                                            <td class="px-4 py-3 text-center"><button onclick="deletePreregistro('${a.id}')" class="bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg transition"><i class="ph ph-trash text-lg"></i></button></td>
+                                        </tr>`).join('')}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- Formulario agregar pre-registro -->
-                    <div class="bg-white rounded-2xl border shadow-sm p-6">
-                        <h3 class="font-bold text-lg mb-4"><i class="ph ph-user-plus"></i> Agregar Alumno al Catálogo</h3>
-                        <form id="addPreregForm" class="space-y-4">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Nombre Completo</label>
-                                <input type="text" id="preregNombre" required placeholder="Ej: Juan Pérez García"
-                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Matrícula</label>
-                                <input type="text" id="preregMatricula" required placeholder="Ej: 2023001"
-                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white transition">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase">Carrera</label>
-                                <select id="preregCarrera" class="w-full p-3 rounded-lg border bg-gray-50">
-                                    <option>Ing. Software</option>
-                                    <option>Mecatrónica</option>
-                                    <option>Administración</option>
+                    <div class="flex flex-col gap-6 sticky top-24">
+                        <!-- Carga Manual -->
+                        <div class="bg-white rounded-2xl border shadow-sm p-6">
+                            <h3 class="font-bold text-lg mb-4 text-slate-800 border-b pb-3"><i class="ph ph-user-plus text-purple-600"></i> Agregar Uno a Uno</h3>
+                            <form onsubmit="event.preventDefault(); addPrereg();" id="addPreregForm" class="space-y-4">
+                                <input type="text" id="preregNombre" required placeholder="Nombre Completo" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none transition text-sm">
+                                <input type="text" id="preregMatricula" required placeholder="Matrícula" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none transition text-sm">
+                                <select id="preregCarrera" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none text-sm font-medium">
+                                    <option>Ing. Software</option><option>Mecatrónica</option><option>Administración</option>
                                 </select>
-                            </div>
-                            <div id="preregMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg"></div>
-                            <button type="submit"
-                                class="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition flex items-center justify-center gap-2">
-                                <i class="ph ph-plus"></i> Agregar al Catálogo
+                                <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex items-center justify-center gap-2"><i class="ph ph-plus"></i> Guardar Alumno</button>
+                            </form>
+                        </div>
+
+                        <!-- Carga Masiva (Excel) -->
+                        <div class="bg-white rounded-2xl border shadow-sm p-6">
+                            <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3"><i class="ph ph-file-xls text-green-600"></i> Carga Masiva (Excel)</h3>
+                            <p class="text-xs text-gray-500 mb-4">Sube un archivo .xlsx o .csv con las columnas: <b>Nombre, Matricula, Carrera</b>.</p>
+                            
+                            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="hidden" onchange="procesarExcel(event)">
+                            <button onclick="document.getElementById('excelFile').click()" class="w-full bg-green-50 text-green-700 font-bold py-3.5 rounded-xl border border-green-200 hover:bg-green-100 transition shadow-sm flex items-center justify-center gap-2">
+                                <i class="ph ph-upload-simple text-lg"></i> Seleccionar Archivo
                             </button>
-                        </form>
+                            
+                            <div id="excelProgress" class="hidden mt-4 text-sm text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100"></div>
+                        </div>
                     </div>
                 </div>
             `;
+        }
 
-            document.getElementById('addPreregForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const msgBox = document.getElementById('preregMsg');
-                const btn = e.target.querySelector('button[type="submit"]');
-                const nombre = document.getElementById('preregNombre').value.trim();
-                const matricula = document.getElementById('preregMatricula').value.trim();
-                const carrera = document.getElementById('preregCarrera').value;
+        window.addPrereg = async () => {
+            const nombre = document.getElementById('preregNombre').value.trim();
+            const matricula = document.getElementById('preregMatricula').value.trim();
+            const carrera = document.getElementById('preregCarrera').value;
+            try {
+                const q = query(getCol('preregistros'), where("matricula", "==", matricula));
+                if (!(await getDocs(q)).empty) return alert("Matrícula ya existe en catálogo.");
+                await addDoc(getCol('preregistros'), { nombre, matricula, carrera });
+                adminTab('preregistros');
+            } catch (err) { alert(err.message); }
+        };
 
-                btn.disabled = true;
-                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
-                msgBox.classList.add('hidden');
+        window.deletePreregistro = async (id) => {
+            if (!confirm("¿Eliminar del catálogo?")) return;
+            try { await deleteDoc(doc(db, 'preregistros', id)); adminTab('preregistros'); } catch(e) { alert(e.message); }
+        };
 
+        // --- PROCESAMIENTO DE EXCEL MASIVO ---
+        window.procesarExcel = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const progress = document.getElementById('excelProgress');
+            progress.classList.remove('hidden');
+            progress.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> Leyendo documento...';
+            progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100';
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
                 try {
-                    // Verificar que la matrícula no esté ya en el catálogo
-                    const q = query(getCol('preregistros'), where("matricula", "==", matricula));
-                    const snap = await getDocs(q);
-                    if (!snap.empty) {
-                        msgBox.textContent = 'Esta matrícula ya está en el catálogo.';
-                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
-                        msgBox.classList.remove('hidden');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (json.length === 0) {
+                        progress.innerHTML = 'El archivo parece estar vacío o sin datos.';
+                        progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
                         return;
                     }
 
-                    await addDoc(getCol('preregistros'), { nombre, matricula, carrera });
-                    msgBox.textContent = '✓ Alumno agregado al catálogo correctamente.';
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700';
-                    msgBox.classList.remove('hidden');
-                    btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
-                    e.target.reset();
-                    setTimeout(() => adminTab('preregistros'), 1000);
+                    progress.innerHTML = `<i class="ph ph-spinner animate-spin text-lg"></i> Subiendo ${json.length} alumnos detectados...`;
+
+                    let agregados = 0;
+                    let omitidos = 0;
+
+                    // Traer existentes para no duplicar
+                    const q = query(getCol('preregistros'));
+                    const snap = await getDocs(q);
+                    const existentes = new Set();
+                    snap.forEach(doc => existentes.add(doc.data().matricula.toString().trim().toLowerCase()));
+
+                    // Iterar sobre las filas del Excel
+                    for (const row of json) {
+                        const keys = Object.keys(row);
+                        // Búsqueda flexible de nombres de columnas (ignora mayúsculas/minúsculas y acentos)
+                        const getVal = (searchString) => {
+                            const k = keys.find(key => key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(searchString));
+                            return k ? row[k].toString().trim() : '';
+                        };
+
+                        const nombre = getVal('nombre');
+                        const matricula = getVal('matricul'); // Detecta matricula o matrícula
+                        const carrera = getVal('carrera') || 'No especificada';
+
+                        if (nombre && matricula) {
+                            if (!existentes.has(matricula.toLowerCase())) {
+                                await addDoc(getCol('preregistros'), { nombre, matricula, carrera });
+                                existentes.add(matricula.toLowerCase());
+                                agregados++;
+                            } else {
+                                omitidos++;
+                            }
+                        }
+                    }
+
+                    progress.innerHTML = `¡Completado! <br> <b>${agregados}</b> agregados nuevos.<br> <b>${omitidos}</b> omitidos (ya existían).`;
+                    progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700 border border-green-100';
+                    
+                    // Refrescar la tabla
+                    setTimeout(() => adminTab('preregistros'), 2000);
+
                 } catch (err) {
-                    msgBox.textContent = 'Error: ' + err.message;
-                    msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
-                    msgBox.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="ph ph-plus"></i> Agregar al Catálogo';
+                    progress.innerHTML = 'Error al leer el Excel: ' + err.message;
+                    progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
                 }
+                
+                // Limpiar el input para permitir subir el mismo archivo si hubo error
+                e.target.value = '';
             };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // --- PROCESAMIENTO DE EXCEL MASIVO PARA DOCENTES ---
+        window.procesarExcelDocentes = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const progress = document.getElementById('excelProgressDocentes');
+            progress.classList.remove('hidden');
+            progress.innerHTML = '<i class="ph ph-spinner animate-spin text-lg"></i> Leyendo documento...';
+            progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100';
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (json.length === 0) {
+                        progress.innerHTML = 'El archivo parece estar vacío o sin datos.';
+                        progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
+                        return;
+                    }
+
+                    progress.innerHTML = `<i class="ph ph-spinner animate-spin text-lg"></i> Subiendo ${json.length} docentes detectados...`;
+
+                    let agregados = 0;
+                    let omitidos = 0;
+
+                    // Traer existentes para no duplicar por número de nómina
+                    const q = query(getCol('profesores'));
+                    const snap = await getDocs(q);
+                    const existentes = new Set();
+                    snap.forEach(doc => existentes.add(doc.data().nomina.toString().trim().toLowerCase()));
+
+                    // Iterar sobre las filas del Excel
+                    for (const row of json) {
+                        const keys = Object.keys(row);
+                        // Búsqueda flexible de nombres de columnas
+                        const getVal = (searchString) => {
+                            const k = keys.find(key => key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(searchString));
+                            return k ? row[k].toString().trim() : '';
+                        };
+
+                        const nombre = getVal('nombre');
+                        const nomina = getVal('nomina') || getVal('num') || getVal('id'); 
+                        const departamento = getVal('departamento') || getVal('area') || getVal('especialidad') || 'No especificada';
+
+                        if (nombre && nomina) {
+                            if (!existentes.has(nomina.toLowerCase())) {
+                                await addDoc(getCol('profesores'), { nombre, nomina: nomina.toUpperCase(), departamento });
+                                existentes.add(nomina.toLowerCase());
+                                agregados++;
+                            } else {
+                                omitidos++;
+                            }
+                        }
+                    }
+
+                    progress.innerHTML = `¡Completado! <br> <b>${agregados}</b> docentes nuevos.<br> <b>${omitidos}</b> omitidos (ya existían).`;
+                    progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-green-50 text-green-700 border border-green-100';
+                    
+                    // Refrescar la tabla
+                    setTimeout(() => adminTab('profesores'), 2000);
+
+                } catch (err) {
+                    progress.innerHTML = 'Error al leer el Excel: ' + err.message;
+                    progress.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
+                }
+                
+                // Limpiar el input para permitir subir el mismo archivo si hubo error
+                e.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // ==========================================
+        //  UI Y UTILIDADES GLOBALES
+        // ==========================================
+        window.logout = () => { currentStudent = null; updateAuthUI(); router('home'); }
+        window.logoutAdmin = () => { currentAdmin = null; updateAuthUI(); router('home'); };
+
+        function updateAuthUI() {
+            const btn = document.getElementById('authButtonContainer');
+            if (currentAdmin) {
+                btn.innerHTML = `<button onclick="router('adminPanel')" class="bg-red-50 text-red-600 font-bold text-sm flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition"><i class="ph ph-shield-star text-lg"></i> Panel Rectoría</button>`;
+            } else if (currentStudent) {
+                btn.innerHTML = `<button onclick="router('dashboard')" class="bg-green-700 hover:bg-green-800 text-white font-bold text-sm px-5 py-2 rounded-lg flex items-center gap-2 shadow transition"><i class="ph ph-user"></i> Mi Perfil</button>`;
+            } else {
+                btn.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <button onclick="router('login')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center gap-2 shadow-sm"><i class="ph ph-sign-in"></i> Acceso</button>
+                        <button onclick="router('adminLogin')" class="border border-red-200 text-red-500 bg-red-50 px-3 py-2 rounded-lg text-sm hover:bg-red-100 hover:text-red-600 transition flex items-center shadow-sm" title="Portal Rectoría"><i class="ph ph-shield-star text-lg"></i></button>
+                    </div>`;
+            }
         }
 
-        window.filterPreregTable = (val) => {
-            const v = val.toLowerCase();
-            document.querySelectorAll('.prereg-row').forEach(row => {
-                const nombre = row.dataset.nombre || '';
-                const mat = row.dataset.mat || '';
-                row.style.display = (nombre.includes(v) || mat.includes(v)) ? '' : 'none';
-            });
-        };
-
-        window.deletePreregistro = async (id, nombre) => {
-            if (!confirm(`¿Eliminar a "${nombre}" del catálogo? Si ya se registró, su cuenta permanece.`)) return;
-            try {
-                const { deleteDoc, doc: docRef } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-                await deleteDoc(docRef(db, 'preregistros', id));
-                alert(`"${nombre}" eliminado del catálogo.`);
-                await adminTab('preregistros');
-            } catch (err) {
-                alert('Error: ' + err.message);
-            }
-        };
-
-        window.logoutAdmin = () => {
-            currentAdmin = null;
-            updateAuthUI();
-            router('home');
-        };
-
-        // Funciones Globales UI
         window.toggleMobileMenu = () => {
             const m = document.getElementById('mobile-menu');
             m.classList.toggle('hidden-menu');
@@ -1837,7 +2178,7 @@
         }
         window.toggleChat = () => document.getElementById('chat-window').classList.toggle('hidden');
 
-        // Init
+        // Init App
         initApp();
         updateAuthUI();
         router('home');
