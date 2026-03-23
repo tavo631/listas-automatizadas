@@ -168,7 +168,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         // IMPORTANTE: Aquí importamos updateDoc y deleteDoc para que el CRUD de maestros y clases funcione
-        import { getFirestore, collection, addDoc, getDocs, query, where, doc, setDoc, updateDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, setDoc, updateDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 1. CONFIGURACIÓN FIREBASE (Tus Credenciales Reales)
         const myFirebaseConfig = {
@@ -1239,7 +1239,8 @@
                                         </div>
                                     </div>
                                     <p class="text-xs text-slate-500 mb-3"><i class="ph ph-briefcase"></i> Área: ${p.departamento || 'No especificada'}</p>
-                                    <div class="flex gap-2 justify-end border-t pt-3 mt-2 border-slate-100">
+                                    <div class="flex gap-2 justify-end border-t pt-3 mt-2 border-slate-100 flex-wrap">
+                                        <button onclick="verHorarioProfesor('${p.id}', '${p.nombre.split(' ')[0]}')" class="text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"><i class="ph ph-calendar-blank"></i> Ver Horario</button>
                                         <button onclick="editProfesor('${p.id}', '${p.nombre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${p.nomina}', '${p.departamento}')" class="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"><i class="ph ph-pencil-simple"></i> Editar</button>
                                         <button onclick="deleteProfesor('${p.id}', '${p.nombre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" class="text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition flex items-center gap-1"><i class="ph ph-trash"></i> Borrar</button>
                                     </div>
@@ -1350,6 +1351,204 @@
             } catch(e) { alert("Error al eliminar: " + e.message); }
         };
 
+        // --- MODAL: HORARIO POR PROFESOR ---
+        window.verHorarioProfesor = async (profId, nombre) => {
+            // Crear modal de fondo
+            const overlay = document.createElement('div');
+            overlay.id = 'profScheduleOverlay';
+            overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between p-5 border-b bg-slate-50 rounded-t-2xl flex-shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm border border-blue-200">
+                                ${nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg leading-tight">Horario de ${nombre}</h3>
+                                <p class="text-xs text-slate-500">Clases asignadas en todos los grupos</p>
+                            </div>
+                        </div>
+                        <button onclick="document.getElementById('profScheduleOverlay').remove()"
+                            class="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-2 rounded-lg transition">
+                            <i class="ph ph-x text-xl"></i>
+                        </button>
+                    </div>
+                    <!-- Contenido -->
+                    <div id="profScheduleContent" class="flex-grow overflow-y-auto p-5">
+                        <div class="flex justify-center py-10">
+                            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                        </div>
+                    </div>
+                </div>`;
+
+            document.body.appendChild(overlay);
+
+            // Consultar todos los grupos y juntar los bloques del profesor
+            try {
+                const snap = await getDocs(getCol('horarios_grupos'));
+                const dias = window.gridDays;
+                // Mapa: dia → hora → bloque+grupo
+                const mapa = {};
+                dias.forEach(d => { mapa[d] = {}; });
+
+                const grupos = [];
+                const resumenMaterias = {}; // materia -> {horas, grupos: Set}
+                let totalHoras = 0;
+
+                snap.forEach(docSnap => {
+                    const g = docSnap.data();
+                    const bloques = g.bloques || [];
+                    const turno = g.turno || 'Matutino';
+                    const horasGrupo = window.turnos[turno] || window.turnos['Matutino'];
+
+                    bloques.forEach(b => {
+                        if (b.profId !== profId) return;
+
+                        totalHoras += b.duracion;
+                        if (!resumenMaterias[b.materia]) resumenMaterias[b.materia] = { horas: 0, grupos: new Set() };
+                        resumenMaterias[b.materia].horas += b.duracion;
+                        resumenMaterias[b.materia].grupos.add(g.grupo);
+
+                        // Registrar en el mapa día→hora
+                        if (!mapa[b.dia]) return;
+                        const idxB = horasGrupo.indexOf(b.hora);
+                        for (let i = 0; i < b.duracion; i++) {
+                            const h = horasGrupo[idxB + i];
+                            if (!h) continue;
+                            if (!mapa[b.dia][h]) mapa[b.dia][h] = [];
+                            mapa[b.dia][h].push({
+                                materia: b.materia,
+                                grupo: g.grupo,
+                                salon: b.salon,
+                                hora: b.hora,
+                                duracion: b.duracion,
+                                turno,
+                                esInicio: i === 0
+                            });
+                        }
+                    });
+                });
+
+                // Todas las horas únicas ordenadas
+                const todasHoras = [...new Set(
+                    Object.values(mapa).flatMap(diaObj => Object.keys(diaObj))
+                )].sort();
+
+                if (todasHoras.length === 0) {
+                    document.getElementById('profScheduleContent').innerHTML = `
+                        <div class="text-center py-16 text-slate-400">
+                            <i class="ph ph-calendar-x text-5xl mb-3 opacity-40"></i>
+                            <p class="font-medium">Este docente no tiene clases asignadas en ningún grupo.</p>
+                        </div>`;
+                    return;
+                }
+
+                // Colores por grupo
+                const gruposUnicos = [...new Set(snap.docs.map(d => d.data().grupo))];
+                const paleta = ['bg-blue-100 text-blue-800 border-blue-300',
+                                'bg-purple-100 text-purple-800 border-purple-300',
+                                'bg-emerald-100 text-emerald-800 border-emerald-300',
+                                'bg-amber-100 text-amber-800 border-amber-300',
+                                'bg-rose-100 text-rose-800 border-rose-300',
+                                'bg-cyan-100 text-cyan-800 border-cyan-300',
+                                'bg-indigo-100 text-indigo-800 border-indigo-300',
+                                'bg-orange-100 text-orange-800 border-orange-300'];
+                const colorGrupo = {};
+                gruposUnicos.forEach((g, i) => colorGrupo[g] = paleta[i % paleta.length]);
+
+                // Resumen de materias
+                const materiasOrdenadas = Object.entries(resumenMaterias).sort((a,b) => b[1].horas - a[1].horas);
+                const htmlResumen = materiasOrdenadas.map(([mat, info]) => `
+                    <div class="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
+                        <span class="text-sm font-semibold text-slate-700">${mat}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">${[...info.grupos].join(', ')}</span>
+                            <span class="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full">${info.horas}h/sem</span>
+                        </div>
+                    </div>`).join('');
+
+                // Construir tabla
+                let tabla = '<div class="overflow-x-auto">';
+                tabla += '<table class="w-full text-xs text-center border-collapse rounded-xl overflow-hidden border border-slate-200">';
+                tabla += '<thead class="bg-slate-100 text-slate-500 uppercase tracking-wider text-[10px]"><tr>';
+                tabla += '<th class="p-2.5 border-r border-b border-slate-200 w-16 bg-slate-200/50"><i class="ph ph-clock"></i></th>';
+                dias.forEach(d => tabla += `<th class="p-2.5 border-b border-r border-slate-200 font-bold">${d}</th>`);
+                tabla += '</tr></thead><tbody>';
+
+                todasHoras.forEach(h => {
+                    tabla += `<tr><td class="p-2 font-bold text-slate-500 bg-slate-50 border-r border-b border-slate-200 text-[10px] whitespace-nowrap">${h}</td>`;
+                    dias.forEach(d => {
+                        const celdas = mapa[d][h];
+                        if (!celdas || celdas.length === 0) {
+                            tabla += '<td class="p-1 border-r border-b border-slate-100 bg-white"></td>';
+                        } else {
+                            const c = celdas[0];
+                            const colores = colorGrupo[c.grupo] || paleta[0];
+                            if (c.esInicio) {
+                                tabla += `<td rowspan="${c.duracion}" class="p-2 border-r border-b ${colores} border align-top">
+                                    <div class="font-bold text-[10px] leading-tight mb-1 uppercase tracking-wide">${c.materia}</div>
+                                    <div class="font-bold text-[11px] bg-white/60 rounded px-1 py-0.5 inline-block">${c.grupo}</div>
+                                    <div class="text-[10px] opacity-75 mt-1"><i class="ph ph-map-pin"></i> ${c.salon}</div>
+                                </td>`;
+                            }
+                            // Si no es inicio, es spanned — no agregar td
+                        }
+                    });
+                    tabla += '</tr>';
+                });
+                tabla += '</tbody></table></div>';
+
+                document.getElementById('profScheduleContent').innerHTML = `
+                    <!-- Pills de resumen -->
+                    <div class="flex gap-2 flex-wrap mb-5">
+                        <span class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full flex items-center gap-1">
+                            <i class="ph ph-clock"></i> ${totalHoras}h semanales
+                        </span>
+                        <span class="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full flex items-center gap-1">
+                            <i class="ph ph-book-open"></i> ${materiasOrdenadas.length} materia${materiasOrdenadas.length !== 1 ? 's' : ''}
+                        </span>
+                        ${totalHoras > 20 ? '<span class="text-xs font-bold bg-amber-50 border border-amber-200 text-amber-700 px-3 py-1.5 rounded-full flex items-center gap-1"><i class="ph ph-warning"></i> Carga alta</span>' : ''}
+                    </div>
+
+                    <!-- Grid de horario -->
+                    <div class="mb-5">${tabla}</div>
+
+                    <!-- Leyenda de colores + resumen materias -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <!-- Leyenda grupos -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
+                                <i class="ph ph-users-three"></i> Grupos
+                            </h4>
+                            <div class="flex flex-wrap gap-2">
+                                ${gruposUnicos.filter(g => Object.values(resumenMaterias).some(m => m.grupos.has(g))).map(g => `
+                                    <span class="text-xs font-bold border px-2.5 py-1 rounded-full ${colorGrupo[g] || paleta[0]}">${g}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <!-- Resumen materias -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
+                                <i class="ph ph-book-open"></i> Materias
+                            </h4>
+                            ${htmlResumen}
+                        </div>
+                    </div>
+                `;
+
+            } catch (err) {
+                document.getElementById('profScheduleContent').innerHTML = `
+                    <div class="text-center py-10 text-red-500">
+                        <i class="ph ph-warning-circle text-3xl mb-2"></i>
+                        <p class="text-sm">Error al cargar el horario: ${err.message}</p>
+                    </div>`;
+            }
+        };
+
         // --- TAB: CLASES, GRUPOS Y HORARIOS ---
         
         window.loadGroupsList = async () => {
@@ -1414,9 +1613,11 @@
             document.getElementById('gridTitle').innerHTML = `Horario: <span class="text-green-600 font-extrabold">${grupoName}</span> <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500 uppercase ml-2 border border-slate-200">${window.activeTurno}</span>`;
             document.getElementById('btnSaveSchedule').classList.remove('hidden');
             document.getElementById('btnDeleteGroup').classList.remove('hidden');
+            document.getElementById('btnExportPDF').classList.remove('hidden');
 
-            const docSnap = await getDocs(query(getCol('horarios_grupos'), where("grupo", "==", grupoName)));
-            window.activeSchedule = docSnap.docs[0].data().bloques || [];
+            // Usar docId directo — más confiable que buscar por nombre
+            const docSnap = await getDoc(doc(db, 'horarios_grupos', docId));
+            window.activeSchedule = docSnap.exists() ? (docSnap.data().bloques || []) : [];
             
             window.renderScheduleGrid();
         };
@@ -1471,6 +1672,142 @@
             });
             html += '</tbody></table>';
             document.getElementById('gridContainer').innerHTML = html;
+
+            // ── Contador de horas por materia y por profesor ──────────
+            renderHoursCounter();
+        };
+
+        window.renderHoursCounter = () => {
+            const container = document.getElementById('hoursCounterPanel');
+            if (!container) return;
+
+            const schedule = window.activeSchedule || [];
+
+            // Ocultar el panel si no hay bloques
+            if (schedule.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+
+            // Acumular horas por materia
+            const porMateria = {};
+            schedule.forEach(b => {
+                if (!porMateria[b.materia]) porMateria[b.materia] = 0;
+                porMateria[b.materia] += b.duracion;
+            });
+
+            // Acumular horas por profesor
+            const porProfesor = {};
+            schedule.forEach(b => {
+                const key = b.profNombre || 'Sin asignar';
+                if (!porProfesor[key]) porProfesor[key] = { horas: 0, materias: new Set() };
+                porProfesor[key].horas += b.duracion;
+                porProfesor[key].materias.add(b.materia);
+            });
+
+            const totalHoras = schedule.reduce((s, b) => s + b.duracion, 0);
+
+            // Colores para barras de materias
+            const barColors = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#6366f1','#f97316'];
+            const bgColors  = ['bg-blue-50 border-blue-200 text-blue-700',
+                               'bg-purple-50 border-purple-200 text-purple-700',
+                               'bg-emerald-50 border-emerald-200 text-emerald-700',
+                               'bg-amber-50 border-amber-200 text-amber-700',
+                               'bg-rose-50 border-rose-200 text-rose-700',
+                               'bg-cyan-50 border-cyan-200 text-cyan-700',
+                               'bg-indigo-50 border-indigo-200 text-indigo-700',
+                               'bg-orange-50 border-orange-200 text-orange-700'];
+
+            // ── Materias ──
+            const materiasOrdenadas = Object.entries(porMateria).sort((a, b) => b[1] - a[1]);
+            let htmlMaterias = materiasOrdenadas.map(([materia, horas], idx) => {
+                const pct = Math.round((horas / totalHoras) * 100);
+                const color = barColors[idx % barColors.length];
+                const bg = bgColors[idx % bgColors.length];
+                return `
+                <div class="mb-3">
+                    <div class="flex items-center justify-between mb-1 gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${color}"></span>
+                            <span class="text-xs font-semibold text-slate-700 truncate">${materia}</span>
+                        </div>
+                        <span class="text-xs font-bold border rounded-full px-2 py-0.5 flex-shrink-0 ${bg}">${horas}h</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div class="h-2 rounded-full transition-all duration-500" style="width:${pct}%;background:${color}"></div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            // ── Profesores ──
+            const profOrdenados = Object.entries(porProfesor).sort((a, b) => b[1].horas - a[1].horas);
+            const maxH = profOrdenados[0]?.[1].horas || 1;
+            let htmlProfes = profOrdenados.map(([nombre, data]) => {
+                const pct = Math.round((data.horas / maxH) * 100);
+                const cargaAlta = data.horas > 20;
+                const inicial = nombre.charAt(0).toUpperCase();
+                return `
+                <div class="flex items-start gap-3 mb-3 last:mb-0">
+                    <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white mt-0.5"
+                         style="background:${cargaAlta ? '#f59e0b' : '#64748b'}">
+                        ${inicial}
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <div class="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                            <span class="text-xs font-semibold text-slate-700 truncate">${nombre}</span>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                ${cargaAlta ? '<span class="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">Carga alta</span>' : ''}
+                                <span class="text-xs font-bold text-slate-500">${data.horas}h/sem</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2 mb-1">
+                            <div class="h-2 rounded-full transition-all duration-500"
+                                 style="width:${pct}%;background:${cargaAlta ? '#f59e0b' : '#94a3b8'}"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-400 truncate">${[...data.materias].join(' · ')}</p>
+                    </div>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="border-t border-slate-200 pt-5 mt-2">
+                    <!-- Título del panel -->
+                    <div class="flex items-center gap-2 mb-4">
+                        <i class="ph ph-chart-bar text-slate-500 text-base"></i>
+                        <h4 class="text-sm font-bold text-slate-700">Resumen del horario</h4>
+                        <div class="flex gap-2 ml-auto">
+                            <span class="text-[11px] bg-slate-100 border border-slate-200 text-slate-600 font-bold px-2.5 py-1 rounded-full">
+                                ${totalHoras}h totales
+                            </span>
+                            <span class="text-[11px] bg-slate-100 border border-slate-200 text-slate-600 font-bold px-2.5 py-1 rounded-full">
+                                ${materiasOrdenadas.length} materias
+                            </span>
+                            <span class="text-[11px] bg-slate-100 border border-slate-200 text-slate-600 font-bold px-2.5 py-1 rounded-full">
+                                ${profOrdenados.length} docentes
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Dos columnas: materias | docentes -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Columna materias -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h5 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <i class="ph ph-book-open"></i> Horas por materia
+                            </h5>
+                            ${htmlMaterias}
+                        </div>
+                        <!-- Columna docentes -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h5 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <i class="ph ph-chalkboard-teacher"></i> Carga docente
+                            </h5>
+                            ${htmlProfes}
+                        </div>
+                    </div>
+                </div>
+            `;
         };
 
         window.openBlockModal = (dia, hora, blockId = null) => {
@@ -1500,7 +1837,7 @@
 
         window.closeBlockModal = () => document.getElementById('blockModal').classList.add('hidden');
 
-        window.saveGridBlock = () => {
+        window.saveGridBlock = async () => {
             const id = document.getElementById('blockId').value;
             const dia = document.getElementById('blockDia').value;
             const hora = document.getElementById('blockHora').value;
@@ -1510,19 +1847,85 @@
             const duracion = parseInt(document.getElementById('blockDuracion').value);
             const salon = document.getElementById('blockSalon').value.trim().toUpperCase();
 
-            // Chequeo de choques en el horario dependiente del turno
+            // ── 1. Choque dentro del mismo grupo ──────────────────────
             let hourIdx = window.gridHours.indexOf(hora);
-            for(let i=0; i<duracion; i++) {
-                if((hourIdx + i) >= window.gridHours.length) return alert('El bloque excede el horario límite de este turno.');
-                let hCheck = window.gridHours[hourIdx + i];
-                const collision = window.activeSchedule.find(b => b.dia === dia && window.gridHours.indexOf(b.hora) <= window.gridHours.indexOf(hCheck) && (window.gridHours.indexOf(b.hora) + b.duracion - 1) >= window.gridHours.indexOf(hCheck) && b.id !== id);
-                if(collision) return alert('El horario choca con la materia: ' + collision.materia);
+            for (let i = 0; i < duracion; i++) {
+                if ((hourIdx + i) >= window.gridHours.length)
+                    return alert('El bloque excede el horario límite de este turno.');
+                const hCheck = window.gridHours[hourIdx + i];
+                const collision = window.activeSchedule.find(b =>
+                    b.dia === dia &&
+                    window.gridHours.indexOf(b.hora) <= window.gridHours.indexOf(hCheck) &&
+                    (window.gridHours.indexOf(b.hora) + b.duracion - 1) >= window.gridHours.indexOf(hCheck) &&
+                    b.id !== id
+                );
+                if (collision) return alert(`⚠️ Choque en este grupo\n\nEse horario ya lo ocupa: "${collision.materia}"`);
             }
 
+            // ── 2. Choque del PROFESOR en otros grupos ────────────────
+            // Mostrar spinner en el botón del modal mientras consultamos Firestore
+            const btnSave = document.getElementById('btnSaveBlock');
+            const btnOriginal = btnSave ? btnSave.innerHTML : '';
+            if (btnSave) { btnSave.disabled = true; btnSave.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Verificando...'; }
+
+            try {
+                const otrosGruposSnap = await getDocs(getCol('horarios_grupos'));
+                const horasAOcupar = [];
+                for (let i = 0; i < duracion; i++) horasAOcupar.push(window.gridHours[hourIdx + i]);
+
+                const conflictos = [];
+                otrosGruposSnap.forEach(docSnap => {
+                    // Saltar el grupo que estamos editando ahora mismo
+                    if (docSnap.id === window.activeGroupId) return;
+                    const bloques = docSnap.data().bloques || [];
+                    const grupoNombre = docSnap.data().grupo || docSnap.id;
+                    const turnoGrupo = docSnap.data().turno || 'Matutino';
+                    const horasGrupo = window.turnos[turnoGrupo] || window.gridHours;
+
+                    bloques.forEach(b => {
+                        // Solo revisar mismo día y mismo profesor
+                        if (b.dia !== dia || b.profId !== profId) return;
+                        // Calcular las horas que ese bloque ocupa en su turno
+                        const idxB = horasGrupo.indexOf(b.hora);
+                        if (idxB === -1) return;
+                        const horasDelBloque = [];
+                        for (let i = 0; i < b.duracion; i++) {
+                            if (horasGrupo[idxB + i]) horasDelBloque.push(horasGrupo[idxB + i]);
+                        }
+                        // Ver si alguna hora coincide con las que queremos asignar
+                        const choca = horasAOcupar.some(h => horasDelBloque.includes(h));
+                        if (choca) {
+                            conflictos.push({
+                                grupo: grupoNombre,
+                                materia: b.materia,
+                                hora: b.hora,
+                                duracion: b.duracion
+                            });
+                        }
+                    });
+                });
+
+                if (conflictos.length > 0) {
+                    const detalles = conflictos.map(c =>
+                        `• Grupo ${c.grupo} — ${c.materia} (${c.hora}, ${c.duracion}h)`
+                    ).join('\n');
+                    if (btnSave) { btnSave.disabled = false; btnSave.innerHTML = btnOriginal; }
+                    return alert(`⚠️ Choque de profesor detectado\n\n${profNombre} ya tiene clase ese día y hora en:\n\n${detalles}\n\nCambia la hora o asigna otro docente.`);
+                }
+
+            } catch (err) {
+                console.warn('No se pudo verificar choques entre grupos:', err.message);
+                // Si falla la consulta (permisos, etc.) avisamos pero dejamos continuar
+                if (btnSave) { btnSave.disabled = false; btnSave.innerHTML = btnOriginal; }
+            }
+
+            if (btnSave) { btnSave.disabled = false; btnSave.innerHTML = btnOriginal; }
+
+            // ── 3. Todo OK — guardar el bloque ────────────────────────
             const existingIdx = window.activeSchedule.findIndex(x => x.id === id);
             const newBlock = { id, dia, hora, duracion, materia, profId, profNombre, salon };
-            
-            if(existingIdx >= 0) window.activeSchedule[existingIdx] = newBlock;
+
+            if (existingIdx >= 0) window.activeSchedule[existingIdx] = newBlock;
             else window.activeSchedule.push(newBlock);
 
             closeBlockModal();
@@ -1588,24 +1991,47 @@
                         <div id="groupsList" class="overflow-y-auto max-h-[400px] custom-scroll pr-1">
                             <div class="text-center text-gray-400 py-4 text-sm"><i class="ph ph-spinner animate-spin text-xl"></i></div>
                         </div>
+
+                        <!-- Carga masiva desde Excel -->
+                        <div class="border-t border-slate-100 mt-4 pt-4">
+                            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <i class="ph ph-file-xls text-green-600"></i> Carga masiva
+                            </p>
+                            <p class="text-[10px] text-slate-400 mb-3 leading-relaxed">Sube un .xlsx con columnas: <b>Grupo, Turno, Dia, Hora, Materia, Profesor, Salon, Duracion</b></p>
+                            <input type="file" id="excelFileHorarios" accept=".xlsx,.xls,.csv" class="hidden" onchange="procesarExcelHorarios(event)">
+                            <button onclick="document.getElementById('excelFileHorarios').click()"
+                                class="w-full bg-green-50 text-green-700 font-bold py-2.5 rounded-xl border border-green-200 hover:bg-green-100 transition text-xs flex items-center justify-center gap-2">
+                                <i class="ph ph-upload-simple text-base"></i> Subir Excel
+                            </button>
+                            <button onclick="descargarPlantillaHorarios()"
+                                class="w-full mt-2 bg-slate-50 text-slate-600 font-bold py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 transition text-xs flex items-center justify-center gap-2">
+                                <i class="ph ph-download-simple text-base"></i> Descargar plantilla
+                            </button>
+                            <div id="excelProgressHorarios" class="hidden mt-3 text-xs text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100"></div>
+                        </div>
                     </div>
 
-                    <!-- Constructor Visual (Grid) -->
+                    <!-- Grid principal -->
                     <div class="flex-grow w-full bg-white rounded-2xl border shadow-sm p-6 relative overflow-hidden" id="gridArea">
                         <div class="flex justify-between items-center mb-6 border-b pb-4">
                             <h3 class="font-bold text-xl text-slate-800" id="gridTitle">Selecciona un grupo a la izquierda</h3>
-                            <div class="flex gap-2">
+                            <div class="flex gap-2 flex-wrap">
                                 <button id="btnDeleteGroup" class="hidden border border-red-200 text-red-500 bg-red-50 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition" onclick="deleteCurrentGroup()"><i class="ph ph-trash"></i> Eliminar Grupo</button>
+                                <button id="btnExportPDF" class="hidden bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm flex items-center gap-2" onclick="exportarHorarioPDF()"><i class="ph ph-file-pdf"></i> Exportar PDF</button>
                                 <button id="btnSaveSchedule" class="hidden bg-slate-900 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-slate-800 transition" onclick="saveFullSchedule()"><i class="ph ph-cloud-arrow-up"></i> Guardar Nube</button>
                             </div>
                         </div>
-                        
-                        <div id="gridContainer" class="overflow-x-auto pb-4">
+
+                        <div id="gridContainer" class="overflow-x-auto pb-2">
                             <div class="text-center py-24 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                 <i class="ph ph-calendar-grid text-7xl mb-4 opacity-30"></i>
                                 <p class="text-lg font-medium text-slate-500">El constructor visual aparecerá aquí.</p>
                                 <p class="text-sm mt-1">Podrás hacer clic en las celdas para agregar materias.</p>
                             </div>
+                        </div>
+
+                        <!-- Panel resumen de horas — debajo del grid, visible solo cuando hay grupo activo -->
+                        <div id="hoursCounterPanel" class="mt-6 hidden">
                         </div>
 
                         <!-- MODAL DE BLOQUE (Absoluto dentro de gridArea) -->
@@ -1619,7 +2045,6 @@
                                     <input type="hidden" id="blockId">
                                     <input type="hidden" id="blockDia">
                                     <input type="hidden" id="blockHora">
-                                    
                                     <div>
                                         <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Nombre de la Materia</label>
                                         <input type="text" id="blockMateria" required placeholder="Ej. Base de Datos II" class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 font-bold text-slate-800">
@@ -1646,15 +2071,13 @@
                                             <input type="text" id="blockSalon" required placeholder="Ej. L-1" class="w-full p-3 rounded-lg border bg-gray-50 text-sm outline-none focus:border-blue-500 uppercase font-bold">
                                         </div>
                                     </div>
-                                    
                                     <div class="flex gap-3 pt-4 border-t mt-4">
                                         <button type="button" id="btnDeleteBlock" onclick="deleteCurrentBlock()" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-bold hover:bg-red-100 transition"><i class="ph ph-trash text-lg"></i></button>
-                                        <button type="submit" class="flex-grow bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-lg flex justify-center items-center gap-2"><i class="ph ph-check-circle text-lg"></i> Aplicar en Horario</button>
+                                        <button type="submit" id="btnSaveBlock" class="flex-grow bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-lg flex justify-center items-center gap-2"><i class="ph ph-check-circle text-lg"></i> Aplicar en Horario</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
-
                     </div>
                 </div>
             `;
@@ -1662,6 +2085,362 @@
             // Cargar lista de grupos
             setTimeout(loadGroupsList, 100);
         }
+
+        // --- CARGA MASIVA DE HORARIOS DESDE EXCEL ---
+        window.exportarHorarioPDF = async () => {
+            if (!window.activeGroup) return;
+
+            const btn = document.getElementById('btnExportPDF');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Generando...';
+
+            try {
+                // Cargar html2canvas y jsPDF dinámicamente si no están ya
+                const loadScript = (src) => new Promise((res, rej) => {
+                    if (document.querySelector(`script[src="${src}"]`)) return res();
+                    const s = document.createElement('script');
+                    s.src = src; s.onload = res; s.onerror = rej;
+                    document.head.appendChild(s);
+                });
+
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+
+                const gridContainer = document.getElementById('gridContainer');
+                const tabla = gridContainer.querySelector('table');
+
+                if (!tabla) {
+                    alert('No hay horario para exportar. Asegúrate de que el grupo tenga bloques asignados.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ph ph-file-pdf"></i> Exportar PDF';
+                    return;
+                }
+
+                // Crear contenedor de impresión limpio fuera del DOM visible
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;background:white;padding:24px;width:900px;font-family:Inter,sans-serif;';
+
+                // Encabezado del PDF
+                wrapper.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e2e8f0;">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="background:#15803d;color:white;padding:8px;border-radius:8px;font-size:22px;line-height:1;">
+                                🪪
+                            </div>
+                            <div>
+                                <p style="font-size:18px;font-weight:700;color:#0f172a;margin:0;">CredencialesUTN</p>
+                                <p style="font-size:12px;color:#64748b;margin:0;">Sistema de Gestión Académica</p>
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <p style="font-size:13px;font-weight:600;color:#0f172a;margin:0;">Grupo: ${window.activeGroup}</p>
+                            <p style="font-size:11px;color:#64748b;margin:4px 0 0;">Turno: ${window.activeTurno}</p>
+                            <p style="font-size:10px;color:#94a3b8;margin:4px 0 0;">Generado: ${new Date().toLocaleDateString('es-MX', {day:'2-digit',month:'long',year:'numeric'})}</p>
+                        </div>
+                    </div>
+                    <p style="font-size:15px;font-weight:700;color:#1e293b;margin:0 0 12px;">Horario Semanal — ${window.activeGroup}</p>
+                `;
+
+                // Clonar la tabla y limpiar estilos que no sirven en impresión
+                const tablaClone = tabla.cloneNode(true);
+                tablaClone.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px;';
+
+                // Aplicar estilos inline a cada celda para que html2canvas los capture
+                tablaClone.querySelectorAll('th').forEach(th => {
+                    th.style.cssText = 'background:#f1f5f9;color:#475569;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 6px;border:1px solid #e2e8f0;text-align:center;';
+                });
+                tablaClone.querySelectorAll('td').forEach(td => {
+                    const isHora = td.classList.contains('font-bold') ||
+                                   td.style.textAlign === 'right' ||
+                                   td.innerText?.match(/^\d{2}:\d{2}$/);
+                    if (td.classList.contains('bg-blue-50') || td.style.background) {
+                        td.style.cssText = 'background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:8px 6px;vertical-align:top;';
+                    } else if (td.className.includes('bg-slate-50') || isHora) {
+                        td.style.cssText = 'background:#f8fafc;color:#64748b;font-weight:700;font-size:10px;border:1px solid #e2e8f0;padding:8px 6px;text-align:center;white-space:nowrap;';
+                    } else {
+                        td.style.cssText = 'background:white;border:1px solid #f1f5f9;padding:4px;';
+                    }
+                    // Limpiar clases de Tailwind que html2canvas no interpreta
+                    td.className = '';
+                });
+
+                // Limpiar divs internos de cada bloque
+                tablaClone.querySelectorAll('td div').forEach(d => {
+                    d.style.cssText = 'font-size:10px;margin:1px 0;';
+                });
+                tablaClone.querySelectorAll('td span').forEach(s => {
+                    s.style.cssText = 'font-size:9px;background:rgba(255,255,255,0.7);border-radius:3px;padding:1px 4px;';
+                });
+                // Quitar el overlay de hover (border invisible)
+                tablaClone.querySelectorAll('td .pointer-events-none').forEach(el => el.remove());
+
+                wrapper.appendChild(tablaClone);
+
+                // Pie de página
+                const footer = document.createElement('div');
+                footer.style.cssText = 'margin-top:16px;padding-top:10px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;';
+                footer.innerHTML = `
+                    <span style="font-size:9px;color:#94a3b8;">CredencialesUTN — Documento generado automáticamente</span>
+                    <span style="font-size:9px;color:#94a3b8;">Ciclo Escolar 2025-2026</span>
+                `;
+                wrapper.appendChild(footer);
+                document.body.appendChild(wrapper);
+
+                // Capturar con html2canvas
+                const canvas = await html2canvas(wrapper, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false
+                });
+
+                document.body.removeChild(wrapper);
+
+                // Crear PDF con jsPDF
+                const { jsPDF } = window.jspdf;
+                const imgData = canvas.toDataURL('image/png');
+                const pdfW = 297; // A4 landscape en mm
+                const pdfH = 210;
+                const imgW = pdfW - 20; // 10mm margen cada lado
+                const imgH = (canvas.height * imgW) / canvas.width;
+
+                let pdf;
+                if (imgH <= pdfH - 20) {
+                    // Cabe en una página landscape
+                    pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                    pdf.addImage(imgData, 'PNG', 10, 10, imgW, imgH);
+                } else {
+                    // Cabe mejor en portrait o con scroll — usar portrait
+                    const pdfWp = 210; const pdfHp = 297;
+                    const imgWp = pdfWp - 20;
+                    const imgHp = (canvas.height * imgWp) / canvas.width;
+                    pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                    if (imgHp <= pdfHp - 20) {
+                        pdf.addImage(imgData, 'PNG', 10, 10, imgWp, imgHp);
+                    } else {
+                        // Imagen más alta que una página — recortar en páginas
+                        let yOffset = 0;
+                        const pageImgH = pdfHp - 20;
+                        const pageCanvasH = (pageImgH * canvas.width) / imgWp;
+                        while (yOffset < canvas.height) {
+                            if (yOffset > 0) pdf.addPage();
+                            const pageCanvas = document.createElement('canvas');
+                            pageCanvas.width = canvas.width;
+                            pageCanvas.height = Math.min(pageCanvasH, canvas.height - yOffset);
+                            const ctx = pageCanvas.getContext('2d');
+                            ctx.drawImage(canvas, 0, -yOffset);
+                            const pageData = pageCanvas.toDataURL('image/png');
+                            const actualH = (pageCanvas.height * imgWp) / canvas.width;
+                            pdf.addImage(pageData, 'PNG', 10, 10, imgWp, actualH);
+                            yOffset += pageCanvasH;
+                        }
+                    }
+                }
+
+                pdf.save(`Horario_${window.activeGroup}_${window.activeTurno}.pdf`);
+
+            } catch (err) {
+                console.error(err);
+                alert('Error al generar el PDF: ' + err.message);
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ph ph-file-pdf"></i> Exportar PDF';
+        };
+
+        window.descargarPlantillaHorarios = () => {
+            const lineas = [
+                ['=== INSTRUCCIONES ===','','','','','','',''],
+                ['Llena una fila por cada clase/bloque del horario.','','','','','','',''],
+                ['No borres ni cambies los nombres de la fila de columnas.','','','','','','',''],
+                ['Puedes tener varios grupos en el mismo archivo.','','','','','','',''],
+                ['','','','','','','',''],
+                ['=== VALORES VALIDOS ===','','','','','','',''],
+                ['Turno','Matutino  o  Vespertino','','','','','',''],
+                ['Dia','Lunes / Martes / Miercoles / Jueves / Viernes','','','','','',''],
+                ['Hora (Matutino)','08:00 / 09:00 / 10:00 / 11:00 / 12:00 / 13:00','','','','','',''],
+                ['Hora (Vespertino)','16:30 / 17:20 / 18:10 / 19:00 / 19:50 / 20:40 / 21:30','','','','','',''],
+                ['Duracion','1 = 1 hora | 2 = 2 horas | 3 = 3 horas (maximo 5)','','','','','',''],
+                ['Profesor','Escribe el nombre igual que en la plantilla de docentes.','','','','','',''],
+                ['','','','','','','',''],
+                ['=== DATOS (edita desde aqui) ===','','','','','','',''],
+                ['Grupo','Turno','Dia','Hora','Materia','Profesor','Salon','Duracion'],
+                ['3A','Matutino','Lunes','08:00','Programacion Web','Dr. Garcia','LAB-1','2'],
+                ['3A','Matutino','Lunes','11:00','Calculo Diferencial','Mtra. Perez','AULA-2','1'],
+                ['3A','Matutino','Martes','09:00','Base de Datos','Dr. Garcia','LAB-2','2'],
+                ['3A','Matutino','Miercoles','08:00','Redes','Ing. Lopez','LAB-3','1'],
+                ['3A','Matutino','Jueves','10:00','Ingles Tecnico','Lic. Ramirez','AULA-1','1'],
+                ['3A','Matutino','Viernes','08:00','Programacion Web','Dr. Garcia','LAB-1','2'],
+                ['','','','','','','',''],
+                ['3B','Vespertino','Lunes','16:30','Algebra Lineal','Mtra. Perez','AULA-3','2'],
+                ['3B','Vespertino','Martes','19:00','Sistemas Operativos','Ing. Lopez','LAB-1','2'],
+                ['3B','Vespertino','Miercoles','17:20','Calculo Integral','Mtra. Perez','AULA-2','1'],
+                ['3B','Vespertino','Jueves','16:30','Ingles Tecnico','Lic. Ramirez','AULA-1','1'],
+                ['3B','Vespertino','Viernes','18:10','Sistemas Operativos','Ing. Lopez','LAB-1','2'],
+            ];
+            const csv = lineas.map(r => r.map(c => '"' + c + '"').join(',')).join('\r\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'plantilla_horarios.csv';
+            a.click(); URL.revokeObjectURL(url);
+        };
+
+        window.procesarExcelHorarios = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const progress = document.getElementById('excelProgressHorarios');
+            progress.classList.remove('hidden');
+            progress.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Leyendo archivo...';
+            progress.className = 'mt-3 text-xs text-center font-medium p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-100';
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const ws = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(ws);
+
+                    if (json.length === 0) {
+                        progress.innerHTML = 'El archivo está vacío o no tiene datos.';
+                        progress.className = 'mt-3 text-xs text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
+                        return;
+                    }
+
+                    // Función flexible para leer columnas sin importar mayúsculas ni acentos
+                    const getVal = (row, search) => {
+                        const keys = Object.keys(row);
+                        const k = keys.find(key =>
+                            key.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(search)
+                        );
+                        return k ? row[k].toString().trim() : '';
+                    };
+
+                    progress.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Procesando ${json.length} filas...`;
+
+                    // Agrupar filas por grupo+turno
+                    const gruposMap = {};
+                    const errores = [];
+                    const diasValidos = new Set(window.gridDays);
+                    const horasValidas = new Set([
+                        ...window.turnos['Matutino'],
+                        ...window.turnos['Vespertino']
+                    ]);
+
+                    for (const [idx, row] of json.entries()) {
+                        const grupo    = getVal(row, 'grupo').toUpperCase();
+                        const turno    = getVal(row, 'turno') || 'Matutino';
+                        const dia      = getVal(row, 'dia');
+                        const hora     = getVal(row, 'hora');
+                        const materia  = getVal(row, 'materia');
+                        const profNom  = getVal(row, 'profesor') || getVal(row, 'docente') || getVal(row, 'prof');
+                        const salon    = getVal(row, 'salon') || getVal(row, 'aula') || 'S/A';
+                        const duracion = parseInt(getVal(row, 'duracion') || getVal(row, 'bloques') || '1');
+
+                        // Validaciones básicas
+                        if (!grupo || !dia || !hora || !materia) {
+                            errores.push(`Fila ${idx + 2}: faltan campos obligatorios (Grupo, Dia, Hora, Materia).`);
+                            continue;
+                        }
+                        if (!diasValidos.has(dia)) {
+                            errores.push(`Fila ${idx + 2}: día "${dia}" no válido. Usa: ${window.gridDays.join(', ')}.`);
+                            continue;
+                        }
+                        if (!horasValidas.has(hora)) {
+                            errores.push(`Fila ${idx + 2}: hora "${hora}" no válida. Revisa la plantilla.`);
+                            continue;
+                        }
+
+                        const key = `${grupo}||${turno}`;
+                        if (!gruposMap[key]) gruposMap[key] = { grupo, turno, bloques: [] };
+
+                        gruposMap[key].bloques.push({
+                            id: 'blk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                            dia, hora, materia,
+                            profId: '', profNombre: profNom,
+                            salon: salon.toUpperCase(),
+                            duracion: isNaN(duracion) ? 1 : Math.min(duracion, 5)
+                        });
+                    }
+
+                    if (Object.keys(gruposMap).length === 0) {
+                        progress.innerHTML = errores.length > 0
+                            ? 'No se procesó ninguna fila válida.<br><small>' + errores.slice(0,3).join('<br>') + '</small>'
+                            : 'No se encontraron datos válidos.';
+                        progress.className = 'mt-3 text-xs text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
+                        return;
+                    }
+
+                    // Buscar profId real por nombre en Firestore
+                    const profSnap = await getDocs(getCol('profesores'));
+                    const profMap = {};
+                    profSnap.forEach(d => {
+                        profMap[d.data().nombre.toLowerCase()] = d.id;
+                    });
+
+                    // Guardar o actualizar cada grupo en Firestore
+                    let gruposCreados = 0;
+                    let gruposActualizados = 0;
+                    let bloquesTotales = 0;
+
+                    for (const key of Object.keys(gruposMap)) {
+                        const { grupo, turno, bloques } = gruposMap[key];
+
+                        // Asignar profId donde sea posible
+                        bloques.forEach(b => {
+                            if (b.profNombre) {
+                                const found = profMap[b.profNombre.toLowerCase()];
+                                if (found) b.profId = found;
+                            }
+                        });
+
+                        bloquesTotales += bloques.length;
+
+                        // Ver si el grupo ya existe
+                        const q = query(getCol('horarios_grupos'), where("grupo", "==", grupo));
+                        const snap = await getDocs(q);
+
+                        if (snap.empty) {
+                            // Crear grupo nuevo
+                            await addDoc(getCol('horarios_grupos'), { grupo, turno, bloques });
+                            gruposCreados++;
+                        } else {
+                            // Actualizar — añadir bloques nuevos sin borrar los existentes
+                            const docId = snap.docs[0].id;
+                            const bloquesExistentes = snap.docs[0].data().bloques || [];
+                            const idsExistentes = new Set(bloquesExistentes.map(b => `${b.dia}_${b.hora}`));
+                            const nuevos = bloques.filter(b => !idsExistentes.has(`${b.dia}_${b.hora}`));
+                            await updateDoc(doc(db, 'horarios_grupos', docId), {
+                                bloques: [...bloquesExistentes, ...nuevos]
+                            });
+                            gruposActualizados++;
+                        }
+                    }
+
+                    // Resultado final
+                    let msg = `✅ Importación completada<br>
+                        <b>${gruposCreados}</b> grupo${gruposCreados !== 1 ? 's' : ''} creado${gruposCreados !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                        <b>${gruposActualizados}</b> actualizado${gruposActualizados !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                        <b>${bloquesTotales}</b> bloques`;
+                    if (errores.length > 0) {
+                        msg += `<br><span class="text-amber-600">⚠️ ${errores.length} fila${errores.length !== 1 ? 's' : ''} omitida${errores.length !== 1 ? 's' : ''} por errores</span>`;
+                    }
+                    progress.innerHTML = msg;
+                    progress.className = 'mt-3 text-xs text-center font-medium p-3 rounded-lg bg-green-50 text-green-700 border border-green-100';
+
+                    // Refrescar lista de grupos
+                    setTimeout(() => window.loadGroupsList(), 1500);
+
+                } catch (err) {
+                    progress.innerHTML = '❌ Error al procesar: ' + err.message;
+                    progress.className = 'mt-3 text-xs text-center font-medium p-3 rounded-lg bg-red-50 text-red-600 border border-red-100';
+                }
+                e.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        };
 
         // --- TAB: ESTADÍSTICAS ---
         async function renderAdminStats(content) {
