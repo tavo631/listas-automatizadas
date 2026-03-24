@@ -166,7 +166,7 @@
     ========================================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         // IMPORTANTE: Aquí importamos updateDoc y deleteDoc para que el CRUD de maestros y clases funcione
         import { getFirestore, collection, addDoc, getDocs, getDoc, query, where, doc, setDoc, updateDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -603,29 +603,94 @@
 
             // 6. DASHBOARD ALUMNO
             dashboard: `
-                <div class="fade-in max-w-6xl mx-auto">
-                    <div id="dashHeader" class="bg-white p-6 rounded-2xl shadow-sm border mb-8 flex items-center gap-4">
+                <div class="fade-in max-w-5xl mx-auto">
+                    <div id="dashHeader" class="bg-white p-6 rounded-2xl shadow-sm border mb-6 flex items-center justify-between gap-4 flex-wrap">
                         <!-- Inyectado por JS -->
                     </div>
-                    <div class="grid md:grid-cols-3 gap-6">
-                        <div class="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border">
-                            <h3 class="font-bold mb-4">Reporte de Asistencia Semanal</h3>
-                            <canvas id="attendanceChart"></canvas>
+                    <div id="claseActivaBanner" class="hidden mb-6"></div>
+
+                    <!-- Grid principal: horario + registrar asistencia -->
+                    <div class="grid lg:grid-cols-3 gap-6 items-start">
+
+                        <!-- Horario semanal (2 columnas) -->
+                        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border">
+                            <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
+                                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <i class="ph ph-calendar-blank text-green-600"></i> Mi Horario Semanal
+                                </h3>
+                                <span id="dashGrupoBadge" class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hidden"></span>
+                            </div>
+                            <div id="dashHorarioContent" class="p-5">
+                                <div class="flex justify-center py-10">
+                                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="space-y-6">
-                            <div class="bg-green-600 text-white p-6 rounded-2xl shadow-lg">
-                                <div class="text-3xl font-bold mb-1">95%</div>
-                                <div class="text-green-100 text-sm">Asistencia Global</div>
+
+                        <!-- Panel lateral: registrar asistencia -->
+                        <div class="flex flex-col gap-4">
+
+                            <!-- Tarjeta registrar asistencia -->
+                            <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                                <div class="bg-gradient-to-br from-green-700 to-green-900 p-5 text-white">
+                                    <div class="flex items-center gap-3 mb-1">
+                                        <div class="bg-white/20 rounded-xl p-2.5">
+                                            <i class="ph ph-clipboard-text text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-lg leading-tight">Registrar Asistencia</h3>
+                                            <p class="text-green-200 text-xs">Confirma tu presencia en clase</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-5 space-y-4">
+                                    <!-- Clase activa para registrar -->
+                                    <div id="asistenciaClaseInfo" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-500 text-center">
+                                        <i class="ph ph-clock text-lg mb-1 block opacity-50"></i>
+                                        <span class="text-xs">Disponible durante una clase activa</span>
+                                    </div>
+
+                                    <!-- Botón principal -->
+                                    <button id="btnRegistrarAsistencia" disabled
+                                        class="w-full bg-slate-300 text-slate-500 cursor-not-allowed font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 text-sm">
+                                        <i class="ph ph-check-circle text-xl"></i> Registrar mi Asistencia
+                                    </button>
+
+                                    <!-- Info de restricción -->
+                                    <p class="text-[10px] text-gray-400 text-center leading-relaxed">
+                                        El botón se activa automáticamente<br>cuando hay una clase en curso.
+                                    </p>
+                                </div>
                             </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border text-center py-6">
-                                <i class="ph ph-qr-code text-5xl text-green-600 mb-2 opacity-70"></i>
-                                <h3 class="font-bold mb-3">Registrar Asistencia</h3>
-                                <button onclick="router('scanner')" class="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg font-bold shadow transition"><i class="ph ph-camera"></i> Abrir Escáner</button>
+
+                            <!-- Tarjeta resumen rápido -->
+                            <div class="bg-white rounded-2xl shadow-sm border p-5">
+                                <h4 class="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
+                                    <i class="ph ph-chart-bar text-green-600"></i> Esta semana
+                                </h4>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-slate-500">Asistencias</span>
+                                        <span id="contAsistencias" class="font-bold text-green-600">—</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-slate-500">Faltas</span>
+                                        <span id="contFaltas" class="font-bold text-red-400">—</span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2 mt-3">
+                                        <div id="barraAsistencia" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                    <p class="text-[10px] text-gray-400 text-center" id="pctAsistencia">Cargando...</p>
+                                </div>
                             </div>
+
                         </div>
                     </div>
-                    <div class="text-center mt-8">
-                        <button onclick="logout()" class="text-red-500 font-medium hover:underline flex items-center gap-1 justify-center mx-auto"><i class="ph ph-sign-out"></i> Cerrar Sesión</button>
+
+                    <div class="text-center mt-6">
+                        <button onclick="logout()" class="text-red-400 text-sm font-medium hover:text-red-600 transition flex items-center gap-1 justify-center mx-auto">
+                            <i class="ph ph-sign-out"></i> Cerrar Sesión
+                        </button>
                     </div>
                 </div>
             `,
@@ -715,13 +780,27 @@
                 <div class="fade-in max-w-sm mx-auto mt-16">
                     <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                         <div class="text-center mb-8">
-                            <div class="inline-block p-3 bg-red-100 text-red-600 rounded-full mb-4"><i class="ph ph-shield-star text-3xl"></i></div>
+                            <div class="inline-block p-3 bg-red-100 text-red-600 rounded-full mb-4">
+                                <i class="ph ph-shield-star text-3xl"></i>
+                            </div>
                             <h2 class="text-2xl font-bold">Portal Rectoría</h2>
-                            <p class="text-gray-400 text-sm mt-1">Acceso maestro (Simulación)</p>
+                            <p class="text-gray-400 text-sm mt-1">Acceso exclusivo para administradores</p>
                         </div>
                         <form id="adminLoginForm" class="space-y-4">
-                            <button type="submit" class="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-lg">
-                                <i class="ph ph-buildings"></i> Entrar al Panel de Control
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Correo</label>
+                                <input type="email" id="adminEmail" required placeholder="admin@utn.edu.mx"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none transition">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Contraseña</label>
+                                <input type="password" id="adminPass" required placeholder="••••••••"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none transition">
+                            </div>
+                            <div id="adminLoginMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600"></div>
+                            <button type="submit" id="adminLoginBtn"
+                                class="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl hover:bg-red-700 transition flex items-center justify-center gap-2 shadow-lg">
+                                <i class="ph ph-shield-check"></i> Ingresar al Panel
                             </button>
                         </form>
                         <div class="mt-4 text-center">
@@ -982,6 +1061,17 @@
                 msgBox.classList.add('hidden');
 
                 try {
+                    // Verificar si el correo ya está registrado en Firebase Auth
+                    const methods = await fetchSignInMethodsForEmail(auth, email);
+                    if (methods.length > 0) {
+                        msgBox.textContent = 'Este correo ya tiene una cuenta registrada. Intenta iniciar sesión o recupera tu contraseña.';
+                        msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
+                        msgBox.classList.remove('hidden');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Enviar Código de Verificación';
+                        return;
+                    }
+
                     const passwordHash = await hashPassword(pass);
                     emailVerifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -1038,7 +1128,16 @@
 
                     setTimeout(() => { alert('✅ ¡Registro exitoso!'); router('login'); }, 800);
                 } catch (err) {
-                    msgBox.textContent = 'Error: ' + err.message;
+                    // Mensajes de error amigables en lugar del error crudo de Firebase
+                    let errorMsg = 'Ocurrió un error al crear la cuenta. Intenta de nuevo.';
+                    if (err.code === 'auth/email-already-in-use') {
+                        errorMsg = 'Este correo ya tiene una cuenta registrada. Ve al acceso e inicia sesión, o recupera tu contraseña.';
+                    } else if (err.code === 'auth/weak-password') {
+                        errorMsg = 'La contraseña es demasiado débil.';
+                    } else if (err.code === 'auth/invalid-email') {
+                        errorMsg = 'El correo no tiene un formato válido.';
+                    }
+                    msgBox.textContent = errorMsg;
                     msgBox.className = 'text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600';
                 }
             };
@@ -1072,6 +1171,15 @@
                     const studentData = { id: studentDoc.id, ...studentDoc.data() };
 
                     await signInWithEmailAndPassword(auth, studentData.email, pass);
+
+                    // Si ya verificó en esta sesión del navegador, saltar el 2FA
+                    if (sessionStorage.getItem('2fa_verified') === studentData.id) {
+                        currentStudent = studentData;
+                        tempStudentFor2FA = null;
+                        updateAuthUI();
+                        router('dashboard');
+                        return;
+                    }
 
                     tempStudentFor2FA = studentData;
                     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1132,6 +1240,8 @@
                 const inputCode = document.getElementById('code2fa').value.trim();
                 if (inputCode === sessionStorage.getItem('2fa')) {
                     currentStudent = tempStudentFor2FA;
+                    // Guardar flag para no pedir 2FA de nuevo en esta sesión
+                    sessionStorage.setItem('2fa_verified', currentStudent.id);
                     tempStudentFor2FA = null;
                     sessionStorage.removeItem('2fa');
                     updateAuthUI();
@@ -1148,15 +1258,234 @@
 
         // Dashboard
         async function renderDashboard() {
+            const s = currentStudent;
+
+            // --- Header ---
             document.getElementById('dashHeader').innerHTML = `
-                <img src="${currentStudent.foto}" class="w-16 h-16 rounded-full border-2 border-green-500 shadow-sm">
-                <div>
-                    <h2 class="text-2xl font-bold text-slate-800">Hola, ${currentStudent.nombre.split(' ')[0]}</h2>
-                    <p class="text-gray-500 text-sm font-medium">${currentStudent.carrera} | <span class="text-slate-700">${currentStudent.matricula}</span></p>
+                <div class="flex items-center gap-4">
+                    <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=15803d&color=fff'}"
+                         class="w-16 h-16 rounded-full border-2 border-green-500 shadow-sm flex-shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">Hola, ${s.nombre ? s.nombre.split(' ')[0] : 'Alumno'}</h2>
+                        <p class="text-gray-500 text-sm font-medium">${s.carrera || ''} &bull; <span class="font-mono text-slate-700">${s.matricula || ''}</span></p>
+                        ${s.grupoNombre
+                            ? `<span class="mt-1 inline-block text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full"><i class="ph ph-users-three"></i> Grupo ${s.grupoNombre}</span>`
+                            : `<span class="mt-1 inline-block text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><i class="ph ph-warning"></i> Sin grupo asignado</span>`
+                        }
+                    </div>
                 </div>
             `;
-            const ctx = document.getElementById('attendanceChart').getContext('2d');
-            new Chart(ctx, { type: 'bar', data: { labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'], datasets: [{ label: 'Asistencias', data: [1, 1, 1, 0, 1], backgroundColor: '#16a34a', borderRadius: 4 }] }});
+
+            const horarioContent = document.getElementById('dashHorarioContent');
+            const banner = document.getElementById('claseActivaBanner');
+
+            if (!s.grupoId) {
+                horarioContent.innerHTML = `
+                    <div class="text-center py-16 text-slate-400">
+                        <i class="ph ph-calendar-x text-5xl mb-3 opacity-40"></i>
+                        <p class="font-medium text-slate-500">No tienes un grupo asignado todavía.</p>
+                        <p class="text-sm mt-1">Contacta a administración para que te asignen a un grupo.</p>
+                    </div>`;
+                return;
+            }
+
+            try {
+                const grupoDoc = await getDoc(doc(db, 'horarios_grupos', s.grupoId));
+                if (!grupoDoc.exists()) {
+                    horarioContent.innerHTML = `<div class="text-center py-10 text-slate-400"><p>No se encontró el horario de tu grupo.</p></div>`;
+                    return;
+                }
+
+                const grupoData = grupoDoc.data();
+                const bloques = grupoData.bloques || [];
+                const turno = grupoData.turno || 'Matutino';
+                const horasDelTurno = window.turnos[turno] || window.turnos['Matutino'];
+                const dias = window.gridDays;
+
+                const badge = document.getElementById('dashGrupoBadge');
+                badge.textContent = grupoData.grupo + ' — ' + turno;
+                badge.classList.remove('hidden');
+
+                // Detectar clase activa
+                const ahora = new Date();
+                const diaActualIdx = ahora.getDay();
+                const diasMap = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes' };
+                const diaActualNombre = diasMap[diaActualIdx] || null;
+                const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+
+                let claseEnCurso = null;
+                if (diaActualNombre) {
+                    for (const b of bloques) {
+                        if (b.dia !== diaActualNombre) continue;
+                        const [h, m] = b.hora.split(':').map(Number);
+                        const inicioMin = h * 60 + m;
+                        const finMin = inicioMin + (b.duracion || 1) * 60;
+                        if (horaActual >= inicioMin && horaActual < finMin) { claseEnCurso = b; break; }
+                    }
+                }
+
+                // Banner clase en curso + activar panel de asistencia
+                if (claseEnCurso) {
+                    banner.classList.remove('hidden');
+                    banner.innerHTML = `
+                        <div class="bg-green-600 text-white rounded-2xl p-5 flex items-center justify-between gap-4 shadow-lg flex-wrap">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-white/20 rounded-xl p-3 flex-shrink-0"><i class="ph ph-book-open-text text-3xl"></i></div>
+                                <div>
+                                    <p class="text-green-100 text-xs font-bold uppercase tracking-wider mb-0.5">Clase en curso ahora</p>
+                                    <h3 class="text-xl font-bold leading-tight">${claseEnCurso.materia}</h3>
+                                    <p class="text-green-100 text-sm mt-0.5">
+                                        <i class="ph ph-clock"></i> ${claseEnCurso.hora} &bull;
+                                        <i class="ph ph-map-pin"></i> ${claseEnCurso.salon || 'S/A'} &bull;
+                                        <i class="ph ph-chalkboard-teacher"></i> ${claseEnCurso.profNombre || 'Docente'}
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="flex items-center gap-1.5 bg-white/20 border border-white/30 text-white text-xs font-bold px-3 py-2 rounded-full">
+                                <span class="w-2 h-2 bg-white rounded-full animate-pulse inline-block"></span> En vivo
+                            </span>
+                        </div>`;
+
+                    // Activar panel lateral de asistencia
+                    const infoEl = document.getElementById('asistenciaClaseInfo');
+                    const btnEl  = document.getElementById('btnRegistrarAsistencia');
+                    if (infoEl) infoEl.innerHTML = `
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="bg-green-100 text-green-700 rounded-lg p-2 flex-shrink-0">
+                                <i class="ph ph-book-open-text text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-800 text-xs leading-tight">${claseEnCurso.materia}</p>
+                                <p class="text-[10px] text-slate-500 mt-0.5">
+                                    <i class="ph ph-map-pin"></i> ${claseEnCurso.salon || 'S/A'} &bull; ${claseEnCurso.hora}
+                                </p>
+                            </div>
+                        </div>`;
+                    if (btnEl) {
+                        btnEl.disabled = false;
+                        btnEl.className = 'w-full bg-green-600 hover:bg-green-700 active:scale-95 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-200';
+                    }
+                }
+
+                // Resumen de asistencias de la semana (simulado visualmente)
+                try {
+                    const ahora2 = new Date();
+                    const lunesActual = new Date(ahora2);
+                    lunesActual.setDate(ahora2.getDate() - (ahora2.getDay() === 0 ? 6 : ahora2.getDay() - 1));
+                    lunesActual.setHours(0,0,0,0);
+                    const viernesActual = new Date(lunesActual);
+                    viernesActual.setDate(lunesActual.getDate() + 5);
+
+                    const qAsist = query(
+                        getCol('asistencias'),
+                        where('alumnoId', '==', s.id)
+                    );
+                    const snapAsist = await getDocs(qAsist);
+                    let contSemana = 0;
+                    snapAsist.forEach(d => {
+                        const fecha = new Date(d.data().fecha);
+                        if (fecha >= lunesActual && fecha < viernesActual) contSemana++;
+                    });
+
+                    // Calcular total de clases que debieron haber en la semana hasta hoy
+                    const diaHoyIdx = ahora2.getDay(); // 1=Lun...5=Vie
+                    const diasPasados = ['Lunes','Martes','Miércoles','Jueves','Viernes'].slice(0, Math.max(0, diaHoyIdx));
+                    const totalEsperado = bloques.reduce((acc, b) => diasPasados.includes(b.dia) ? acc + 1 : acc, 0);
+                    const faltas = Math.max(0, totalEsperado - contSemana);
+                    const pct = totalEsperado > 0 ? Math.round((contSemana / totalEsperado) * 100) : 0;
+
+                    const elCont = document.getElementById('contAsistencias');
+                    const elFalt = document.getElementById('contFaltas');
+                    const elBarra = document.getElementById('barraAsistencia');
+                    const elPct = document.getElementById('pctAsistencia');
+                    if (elCont) elCont.textContent = contSemana;
+                    if (elFalt) elFalt.textContent = faltas;
+                    if (elBarra) elBarra.style.width = pct + '%';
+                    if (elPct) elPct.textContent = totalEsperado > 0 ? pct + '% de asistencia esta semana' : 'Sin clases registradas esta semana';
+                } catch(e) {
+                    const elPct = document.getElementById('pctAsistencia');
+                    if (elPct) elPct.textContent = 'Sin datos aún';
+                }
+
+                if (bloques.length === 0) {
+                    horarioContent.innerHTML = `
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="ph ph-calendar-blank text-5xl mb-3 opacity-40"></i>
+                            <p class="font-medium">Tu grupo aún no tiene clases programadas.</p>
+                        </div>`;
+                    return;
+                }
+
+                // Construir mapa de bloques
+                const mapa = {};
+                dias.forEach(d => { mapa[d] = {}; });
+                bloques.forEach(b => {
+                    if (!mapa[b.dia]) return;
+                    const idx = horasDelTurno.indexOf(b.hora);
+                    for (let i = 0; i < (b.duracion || 1); i++) {
+                        const h = horasDelTurno[idx + i];
+                        if (!h) continue;
+                        if (!mapa[b.dia][h]) mapa[b.dia][h] = [];
+                        mapa[b.dia][h].push({ ...b, esInicio: i === 0 });
+                    }
+                });
+
+                const horasUsadas = horasDelTurno.filter(h => dias.some(d => mapa[d][h] && mapa[d][h].length > 0));
+
+                if (horasUsadas.length === 0) {
+                    horarioContent.innerHTML = `<div class="text-center py-10 text-slate-400"><p>No hay clases en el horario.</p></div>`;
+                    return;
+                }
+
+                let tabla = `<div class="overflow-x-auto"><table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-slate-50">
+                        <th class="p-3 text-left text-xs font-bold text-slate-500 uppercase border-b border-r w-20">Hora</th>
+                        ${dias.map(d => {
+                            const esHoy = d === diaActualNombre;
+                            return `<th class="p-3 text-center text-xs font-bold uppercase border-b ${esHoy ? 'text-green-700 bg-green-50' : 'text-slate-500'}">${d.substring(0,3)}${esHoy ? ' <span class=\"text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded-full ml-1\">hoy</span>' : ''}</th>`;
+                        }).join('')}
+                    </tr></thead><tbody>`;
+
+                const spanned = {};
+                horasUsadas.forEach(hora => {
+                    tabla += `<tr>`;
+                    tabla += `<td class="p-2 pr-3 text-right text-xs font-mono text-slate-400 border-r border-b whitespace-nowrap">${hora}</td>`;
+                    dias.forEach(dia => {
+                        const key = dia + '_' + hora;
+                        if (spanned[key]) return;
+                        const celdas = mapa[dia][hora];
+                        if (!celdas || celdas.length === 0) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
+                        const b = celdas[0];
+                        if (!b.esInicio) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
+                        for (let i = 1; i < (b.duracion || 1); i++) {
+                            const hSig = horasDelTurno[horasDelTurno.indexOf(hora) + i];
+                            if (hSig) spanned[dia + '_' + hSig] = true;
+                        }
+                        const esActiva = claseEnCurso && claseEnCurso.id === b.id;
+                        const colorBase = esActiva ? 'bg-green-50 border-green-300 border ring-2 ring-green-400 ring-offset-1' : 'bg-blue-50 border-blue-100 border';
+                        tabla += `<td rowspan="${b.duracion || 1}" class="border-b border-r p-2 align-top">
+                            <div class="${colorBase} rounded-lg p-2 h-full relative">
+                                ${esActiva ? '<span class=\"absolute top-1.5 right-1.5 w-2 h-2 bg-green-500 rounded-full animate-pulse\"></span>' : ''}
+                                <div class="font-bold text-xs text-slate-800 leading-tight">${b.materia}</div>
+                                <div class="text-[10px] text-slate-500 mt-1 space-y-0.5">
+                                    <div><i class="ph ph-chalkboard-teacher"></i> ${b.profNombre || '—'}</div>
+                                    <div><i class="ph ph-map-pin"></i> ${b.salon || 'S/A'}</div>
+                                </div>
+                            </div>
+                        </td>`;
+                    });
+                    tabla += `</tr>`;
+                });
+                tabla += `</tbody></table></div>`;
+                horarioContent.innerHTML = tabla;
+
+            } catch (err) {
+                horarioContent.innerHTML = `
+                    <div class="text-center py-10 text-red-400">
+                        <i class="ph ph-warning-circle text-3xl mb-2"></i>
+                        <p class="text-sm">Error al cargar el horario: ${err.message}</p>
+                    </div>`;
+            }
         }
 
         function bindScanner() {
@@ -1180,9 +1509,49 @@
         function bindAdminLogin() {
             document.getElementById('adminLoginForm').onsubmit = async (e) => {
                 e.preventDefault();
-                currentAdmin = { nombre: "Rector", email: "rectoria@utn.edu.mx" };
-                updateAuthUI();
-                router('adminPanel');
+                const btn = document.getElementById('adminLoginBtn');
+                const msgBox = document.getElementById('adminLoginMsg');
+                const email = document.getElementById('adminEmail').value.trim();
+                const pass = document.getElementById('adminPass').value;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Verificando...';
+                msgBox.classList.add('hidden');
+
+                try {
+                    // Hashear la contraseña ingresada para comparar con el hash en Firestore
+                    const passHash = await hashPassword(pass);
+
+                    // Buscar en la colección "admins" por email
+                    const q = query(getCol('admins'), where("email", "==", email));
+                    const snap = await getDocs(q);
+
+                    if (snap.empty) {
+                        throw new Error('Credenciales incorrectas.');
+                    }
+
+                    let adminData = null;
+                    snap.forEach(doc => {
+                        if (doc.data().password === passHash) {
+                            adminData = { id: doc.id, ...doc.data() };
+                        }
+                    });
+
+                    if (!adminData) {
+                        throw new Error('Credenciales incorrectas.');
+                    }
+
+                    // Login exitoso
+                    currentAdmin = adminData;
+                    updateAuthUI();
+                    router('adminPanel');
+
+                } catch (err) {
+                    msgBox.textContent = err.message || 'Error al iniciar sesión.';
+                    msgBox.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ph ph-shield-check"></i> Ingresar al Panel';
+                }
             };
         }
 
@@ -2506,9 +2875,17 @@
 
         // --- TAB: ALUMNOS ---
         async function renderAdminStudents(content) {
-            const snap = await getDocs(getCol('students'));
+            const [snap, gruposSnap] = await Promise.all([
+                getDocs(getCol('students')),
+                getDocs(getCol('horarios_grupos'))
+            ]);
             const students = [];
             snap.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
+
+            const gruposDisponibles = [];
+            gruposSnap.forEach(d => gruposDisponibles.push({ id: d.id, ...d.data() }));
+            const gruposOptionsHtml = `<option value="">Sin grupo asignado</option>` +
+                gruposDisponibles.map(g => `<option value="${g.id}" data-nombre="${g.grupo}">${g.grupo} (${g.turno || 'Matutino'})</option>`).join('');
 
             content.innerHTML = `
                 <div class="grid lg:grid-cols-3 gap-6 items-start">
@@ -2526,11 +2903,12 @@
                                         <th class="px-4 py-3">Alumno</th>
                                         <th class="px-4 py-3">Matrícula</th>
                                         <th class="px-4 py-3">Carrera</th>
+                                        <th class="px-4 py-3 text-center">Grupo</th>
                                         <th class="px-4 py-3 text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${students.length === 0 ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>' :
+                                    ${students.length === 0 ? '<tr><td colspan="5" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>' :
                                     students.map(s => `
                                         <tr class="border-t hover:bg-slate-50 transition student-row" data-name="${(s.nombre||'').toLowerCase()}" data-mat="${(s.matricula||'').toLowerCase()}">
                                             <td class="px-4 py-3 flex items-center gap-3">
@@ -2543,8 +2921,14 @@
                                             <td class="px-4 py-3 text-slate-600 font-mono">${s.matricula || '—'}</td>
                                             <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-block">${s.carrera || '—'}</span></td>
                                             <td class="px-4 py-3 text-center">
+                                                ${s.grupoNombre
+                                                    ? `<span class="bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide inline-block">${s.grupoNombre}</span>`
+                                                    : `<span class="text-gray-300 text-xs">—</span>`
+                                                }
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
                                                 <div class="flex items-center justify-center gap-2">
-                                                    <button onclick="editStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${s.matricula}', '${s.carrera}')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold transition" title="Editar Datos"><i class="ph ph-pencil-simple text-lg"></i></button>
+                                                    <button onclick="editStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${s.matricula}', '${s.carrera}', '${s.grupoId||''}', '${s.grupoNombre||''}')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold transition" title="Editar Datos"><i class="ph ph-pencil-simple text-lg"></i></button>
                                                     <button onclick="deleteStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" class="bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg text-xs font-bold transition" title="Eliminar Alumno"><i class="ph ph-trash text-lg"></i></button>
                                                 </div>
                                             </td>
@@ -2558,7 +2942,7 @@
                     <!-- Formulario de Edición (Ocupa 1 columna) -->
                     <div class="bg-white rounded-2xl border shadow-sm p-6 sticky top-24">
                         <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3"><i class="ph ph-pencil-simple text-blue-600"></i> Editar Alumno</h3>
-                        <p class="text-xs text-gray-500 mb-4">Selecciona un alumno en la tabla para modificar y corregir sus datos.</p>
+                        <p class="text-xs text-gray-500 mb-4">Selecciona un alumno en la tabla para modificar sus datos.</p>
                         
                         <form id="studentEditForm" class="space-y-4">
                             <input type="hidden" id="editStudId" value="">
@@ -2574,6 +2958,13 @@
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Carrera</label>
                                 <input type="text" id="editStudCarrera" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="ph ph-users-three"></i> Grupo Asignado</label>
+                                <select id="editStudGrupo" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                                    ${gruposOptionsHtml}
+                                </select>
+                                <p class="text-[10px] text-gray-400 mt-1">El alumno verá el horario de este grupo al iniciar sesión.</p>
                             </div>
                             
                             <button type="submit" id="studBtnSubmit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
@@ -2597,11 +2988,14 @@
                 const nombre = document.getElementById('editStudNombre').value.trim();
                 const matricula = document.getElementById('editStudMatricula').value.trim();
                 const carrera = document.getElementById('editStudCarrera').value.trim();
+                const grupoSelect = document.getElementById('editStudGrupo');
+                const grupoId = grupoSelect.value;
+                const grupoNombre = grupoId ? (grupoSelect.options[grupoSelect.selectedIndex].dataset.nombre || '') : '';
 
                 try {
-                    await updateDoc(doc(db, 'students', id), { nombre, matricula, carrera });
-                    alert('Datos del alumno corregidos y actualizados exitosamente.');
-                    adminTab('students'); // Refresca la tabla
+                    await updateDoc(doc(db, 'students', id), { nombre, matricula, carrera, grupoId, grupoNombre });
+                    alert('Datos del alumno actualizados exitosamente.');
+                    adminTab('students');
                 } catch(err) {
                     alert('Error al actualizar: ' + err.message);
                     resetStudentForm();
@@ -2618,17 +3012,17 @@
             });
         };
 
-        window.editStudent = (id, nombre, matricula, carrera) => {
+        window.editStudent = (id, nombre, matricula, carrera, grupoId, grupoNombre) => {
             document.getElementById('editStudId').value = id;
             
             // Habilitar inputs
-            const inputs = ['editStudNombre', 'editStudMatricula', 'editStudCarrera'];
-            inputs.forEach(id => document.getElementById(id).disabled = false);
+            ['editStudNombre', 'editStudMatricula', 'editStudCarrera', 'editStudGrupo'].forEach(fid => document.getElementById(fid).disabled = false);
             
             // Llenar datos
             document.getElementById('editStudNombre').value = nombre;
             document.getElementById('editStudMatricula').value = matricula;
             document.getElementById('editStudCarrera').value = carrera !== 'undefined' ? carrera : '';
+            document.getElementById('editStudGrupo').value = grupoId || '';
             
             // Cambiar estilo del botón
             const btn = document.getElementById('studBtnSubmit');
@@ -2643,8 +3037,7 @@
             document.getElementById('editStudId').value = '';
             
             // Deshabilitar inputs
-            const inputs = ['editStudNombre', 'editStudMatricula', 'editStudCarrera'];
-            inputs.forEach(id => document.getElementById(id).disabled = true);
+            ['editStudNombre', 'editStudMatricula', 'editStudCarrera', 'editStudGrupo'].forEach(fid => document.getElementById(fid).disabled = true);
 
             // Restaurar estilo del botón
             const btn = document.getElementById('studBtnSubmit');
@@ -2932,7 +3325,7 @@
         // ==========================================
         //  UI Y UTILIDADES GLOBALES
         // ==========================================
-        window.logout = () => { currentStudent = null; updateAuthUI(); router('home'); }
+        window.logout = () => { currentStudent = null; sessionStorage.removeItem('2fa_verified'); updateAuthUI(); router('home'); }
         window.logoutAdmin = () => { currentAdmin = null; updateAuthUI(); router('home'); };
 
         function updateAuthUI() {
