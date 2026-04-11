@@ -94,6 +94,9 @@
                         <button onclick="router('login')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center gap-2">
                             <i class="ph ph-sign-in"></i> Acceso
                         </button>
+                        <button onclick="router('profesorLogin')" class="border border-blue-300 text-blue-600 px-2 py-2 rounded-lg text-sm hover:bg-blue-50 transition flex items-center" title="Portal Docente">
+                            <i class="ph ph-chalkboard-teacher text-lg"></i>
+                        </button>
                         <button onclick="router('adminLogin')" class="border border-red-300 text-red-500 px-2 py-2 rounded-lg text-sm hover:bg-red-50 transition flex items-center" title="Portal Admin">
                             <i class="ph ph-shield-star text-lg"></i>
                         </button>
@@ -115,6 +118,7 @@
             <a href="#" onclick="router('proyecto'); toggleMobileMenu()" class="text-lg border-b pb-2 font-bold text-green-700">Documentación</a>
             <a href="#" onclick="router('sitemap'); toggleMobileMenu()" class="text-lg border-b pb-2 text-gray-500">Mapa del Sitio</a>
             <a href="#" onclick="router('login'); toggleMobileMenu()" class="mt-4 bg-green-700 text-white text-center py-3 rounded-lg font-bold">Portal Alumno</a>
+            <a href="#" onclick="router('profesorLogin'); toggleMobileMenu()" class="bg-blue-600 text-white text-center py-3 rounded-lg font-bold flex items-center justify-center gap-2"><i class="ph ph-chalkboard-teacher"></i> Portal Docente</a>
             <a href="#" onclick="router('adminLogin'); toggleMobileMenu()" class="bg-red-600 text-white text-center py-3 rounded-lg font-bold flex items-center justify-center gap-2"><i class="ph ph-shield-star"></i> Portal Administrador</a>
         </div>
     </header>
@@ -201,6 +205,7 @@
         let currentStudent = null;
         let tempStudentFor2FA = null;
         let currentAdmin = null;
+        let currentProfesor = null;
         
         // Variable Global para Constructor de Horarios
         window.tempSchedules = [];
@@ -695,6 +700,93 @@
                 </div>
             `,
 
+
+            // P1. LOGIN DOCENTE
+            profesorLogin: `
+                <div class="fade-in max-w-sm mx-auto mt-16">
+                    <div class="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+                        <div class="text-center mb-8">
+                            <div class="inline-block p-3 bg-blue-100 text-blue-600 rounded-full mb-4">
+                                <i class="ph ph-chalkboard-teacher text-3xl"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold">Portal Docente</h2>
+                            <p class="text-gray-400 text-sm mt-1">Accede con tu número de nómina</p>
+                        </div>
+                        <form id="profesorLoginForm" class="space-y-4">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Número de Nómina</label>
+                                <input type="text" id="profLoginNomina" required placeholder="Ej: PRO-001"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition uppercase">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Contraseña</label>
+                                <input type="password" id="profLoginPass" required placeholder="Tu contraseña (por defecto: tu nómina)"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition">
+                            </div>
+                            <div id="profLoginMsg" class="hidden text-sm text-center font-medium p-3 rounded-lg bg-red-50 text-red-600"></div>
+                            <button type="submit" id="profLoginBtn"
+                                class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-lg">
+                                <i class="ph ph-sign-in"></i> Ingresar
+                            </button>
+                        </form>
+                        <p class="text-center text-xs text-gray-400 mt-4">
+                            Tu contraseña por defecto es tu número de nómina.<br>
+                            Si no puedes entrar, contacta a administración.
+                        </p>
+                        <div class="mt-4 text-center">
+                            <button onclick="router('login')" class="text-xs text-gray-400 hover:text-gray-600">← Portal Alumno</button>
+                        </div>
+                    </div>
+                </div>
+            `,
+
+            // P2. DASHBOARD DOCENTE
+            profesorDashboard: `
+                <div class="fade-in max-w-6xl mx-auto">
+                    <!-- Header Docente -->
+                    <div id="profDashHeader" class="bg-white p-6 rounded-2xl shadow-sm border mb-6 flex items-center justify-between gap-4 flex-wrap">
+                        <!-- Inyectado por JS -->
+                    </div>
+
+                    <!-- Stats rápidas -->
+                    <div id="profDashStats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <!-- Inyectado por JS -->
+                    </div>
+
+                    <!-- Mis clases -->
+                    <div class="bg-white rounded-2xl shadow-sm border mb-6">
+                        <div class="p-5 border-b">
+                            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <i class="ph ph-books text-blue-600"></i> Mis Clases
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Selecciona una clase para ver el reporte de asistencia de tus alumnos</p>
+                        </div>
+                        <div id="profClasesList" class="p-5">
+                            <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de alumnos (aparece al seleccionar clase) -->
+                    <div id="profAlumnosPanel" class="hidden bg-white rounded-2xl shadow-sm border">
+                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h3 id="profAlumnosPanelTitle" class="font-bold text-lg text-slate-800"></h3>
+                                <p id="profAlumnosPanelSub" class="text-xs text-gray-400 mt-0.5"></p>
+                            </div>
+                            <div id="profAlumnosPanelBadges" class="flex gap-2 flex-wrap"></div>
+                        </div>
+                        <div id="profAlumnosContent" class="p-5">
+                            <div class="flex justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-6">
+                        <button onclick="logoutProfesor()" class="text-red-400 text-sm font-medium hover:text-red-600 transition flex items-center gap-1 justify-center mx-auto">
+                            <i class="ph ph-sign-out"></i> Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+            `,
             // 7. ESCÁNER
             scanner: `
                 <div class="fade-in max-w-md mx-auto text-center mt-8">
@@ -896,6 +988,10 @@
             else if (route === 'adminPanel') {
                 if (!currentAdmin) { router('adminLogin'); return; }
                 renderAdminPanel();
+            } else if (route === 'profesorLogin') bindProfesorLogin();
+            else if (route === 'profesorDashboard') {
+                if (!currentProfesor) { router('profesorLogin'); return; }
+                renderProfesorDashboard();
             }
         };
 
@@ -3322,22 +3418,566 @@
             reader.readAsArrayBuffer(file);
         };
 
+
+        // ==========================================
+        //  MÓDULO DOCENTE
+        // ==========================================
+        function bindProfesorLogin() {
+            document.getElementById('profesorLoginForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn   = document.getElementById('profLoginBtn');
+                const msg   = document.getElementById('profLoginMsg');
+                const nomina = document.getElementById('profLoginNomina').value.trim().toUpperCase();
+                const pass   = document.getElementById('profLoginPass').value;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Verificando...';
+                msg.classList.add('hidden');
+
+                try {
+                    // Buscar profesor por nómina
+                    const q = query(getCol('profesores'), where("nomina", "==", nomina));
+                    const snap = await getDocs(q);
+                    if (snap.empty) throw new Error('Nómina no encontrada en el sistema.');
+
+                    const profDoc  = snap.docs[0];
+                    const profData = { id: profDoc.id, ...profDoc.data() };
+
+                    // Contraseña: si tiene passwordHash en Firestore, comparar con eso.
+                    // Si no, la contraseña por defecto es su nómina.
+                    const passHash = await hashPassword(pass);
+                    const defaultHash = await hashPassword(nomina);
+
+                    const storedHash = profData.passwordHash || defaultHash;
+                    if (passHash !== storedHash) throw new Error('Contraseña incorrecta.');
+
+                    // Login exitoso
+                    currentProfesor = profData;
+                    window.currentProfesor = profData; // accesible desde exportarReportePDF
+                    updateAuthUI();
+                    router('profesorDashboard');
+
+                } catch (err) {
+                    msg.textContent = err.message;
+                    msg.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ph ph-sign-in"></i> Ingresar';
+                }
+            };
+        }
+
+        async function renderProfesorDashboard() {
+            const p = currentProfesor;
+
+            // --- Header ---
+            document.getElementById('profDashHeader').innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-2xl font-bold border-2 border-blue-300 flex-shrink-0">
+                        ${p.nombre ? p.nombre.split(' ').map(n=>n[0]).slice(0,2).join('') : 'D'}
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">${p.nombre || 'Docente'}</h2>
+                        <p class="text-gray-500 text-sm">
+                            <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">${p.nomina}</span>
+                            &bull; ${p.departamento || 'Sin área asignada'}
+                        </p>
+                        <span class="mt-1 inline-block text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full">
+                            <i class="ph ph-chalkboard-teacher"></i> Docente
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            try {
+                // Cargar todos los grupos y filtrar los que el profesor imparte
+                const [gruposSnap, studentsSnap, asistSnap] = await Promise.all([
+                    getDocs(getCol('horarios_grupos')),
+                    getDocs(getCol('students')),
+                    getDocs(getCol('asistencias'))
+                ]);
+
+                // Mapa de alumnos por grupoId
+                const alumnosPorGrupo = {};
+                studentsSnap.forEach(d => {
+                    const s = { id: d.id, ...d.data() };
+                    if (s.grupoId) {
+                        if (!alumnosPorGrupo[s.grupoId]) alumnosPorGrupo[s.grupoId] = [];
+                        alumnosPorGrupo[s.grupoId].push(s);
+                    }
+                });
+
+                // Mapa de asistencias: grupoId_materia_alumnoId → Set de fechas
+                const asistMap = {};
+                const clasesRealizadasMap = {}; // grupoId_materia → Set de fechas únicas
+                asistSnap.forEach(d => {
+                    const a = d.data();
+                    if (!a.grupoId || !a.materia || !a.alumnoId || !a.fecha) return;
+                    const claveClase = a.grupoId + '||' + a.materia;
+                    const claveAlumno = claveClase + '||' + a.alumnoId;
+                    const fecha = a.fecha.split('T')[0]; // solo la fecha YYYY-MM-DD
+
+                    if (!clasesRealizadasMap[claveClase]) clasesRealizadasMap[claveClase] = new Set();
+                    clasesRealizadasMap[claveClase].add(fecha);
+
+                    if (!asistMap[claveAlumno]) asistMap[claveAlumno] = new Set();
+                    asistMap[claveAlumno].add(fecha);
+                });
+
+                // Encontrar clases que imparte este profesor
+                const misClases = []; // { grupoId, grupoNombre, turno, materia, salon, dia, hora, duracion }
+                gruposSnap.forEach(d => {
+                    const g = { id: d.id, ...d.data() };
+                    const bloques = g.bloques || [];
+                    const materiasVistas = new Set();
+                    bloques.forEach(b => {
+                        if (b.profId !== p.id) return;
+                        if (materiasVistas.has(b.materia)) return; // una card por materia única por grupo
+                        materiasVistas.add(b.materia);
+                        misClases.push({
+                            grupoId:    g.id,
+                            grupoNombre: g.grupo,
+                            turno:      g.turno || 'Matutino',
+                            materia:    b.materia,
+                            salon:      b.salon || 'S/A',
+                            dia:        b.dia,
+                            hora:       b.hora,
+                            duracion:   b.duracion || 1
+                        });
+                    });
+                });
+
+                // --- Stats rápidas ---
+                const totalGrupos  = new Set(misClases.map(c => c.grupoId)).size;
+                const totalMaterias = new Set(misClases.map(c => c.materia)).size;
+                const totalAlumnos = [...new Set(misClases.map(c => c.grupoId))]
+                    .reduce((acc, gid) => acc + (alumnosPorGrupo[gid]?.length || 0), 0);
+                const totalAsist   = asistSnap.size;
+
+                document.getElementById('profDashStats').innerHTML = `
+                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
+                        <div class="text-3xl font-bold text-blue-600">${totalGrupos}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-users-three"></i> Grupos</div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
+                        <div class="text-3xl font-bold text-purple-600">${totalMaterias}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-book-open"></i> Materias</div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
+                        <div class="text-3xl font-bold text-green-600">${totalAlumnos}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-students"></i> Alumnos</div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
+                        <div class="text-3xl font-bold text-amber-500">${totalAsist}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-clipboard-text"></i> Asistencias</div>
+                    </div>
+                `;
+
+                // --- Lista de clases ---
+                const clasesList = document.getElementById('profClasesList');
+                if (misClases.length === 0) {
+                    clasesList.innerHTML = `
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="ph ph-chalkboard text-5xl mb-3 opacity-30"></i>
+                            <p class="font-medium">No tienes clases asignadas todavía.</p>
+                            <p class="text-xs mt-1">Pide al administrador que te asigne materias en el editor de horarios.</p>
+                        </div>`;
+                    return;
+                }
+
+                // Paleta de colores por clase
+                const paleta = [
+                    'border-blue-300 bg-blue-50 text-blue-800',
+                    'border-purple-300 bg-purple-50 text-purple-800',
+                    'border-emerald-300 bg-emerald-50 text-emerald-800',
+                    'border-amber-300 bg-amber-50 text-amber-800',
+                    'border-rose-300 bg-rose-50 text-rose-800',
+                    'border-cyan-300 bg-cyan-50 text-cyan-800',
+                    'border-indigo-300 bg-indigo-50 text-indigo-800',
+                    'border-orange-300 bg-orange-50 text-orange-800',
+                ];
+
+                clasesList.innerHTML = `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">` +
+                    misClases.map((c, i) => {
+                        const color = paleta[i % paleta.length];
+                        const alumnos = alumnosPorGrupo[c.grupoId] || [];
+                        const claveClase = c.grupoId + '||' + c.materia;
+                        const clasesRealizadas = clasesRealizadasMap[claveClase]?.size || 0;
+                        return `
+                        <button onclick="verReporteClase('${c.grupoId}','${c.materia.replace(/'/g,"\'")}','${c.grupoNombre}','${c.turno}','${c.salon}')"
+                            class="clase-card text-left p-4 rounded-2xl border-2 ${color} hover:shadow-md transition-all duration-200 group"
+                            data-clase-id="${c.grupoId}_${c.materia.replace(/[^a-z0-9]/gi,'_')}">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="font-bold text-base leading-tight">${c.materia}</div>
+                                <i class="ph ph-caret-right text-lg opacity-40 group-hover:opacity-100 transition flex-shrink-0 ml-2"></i>
+                            </div>
+                            <div class="space-y-1 text-xs opacity-80">
+                                <div><i class="ph ph-users-three"></i> Grupo <strong>${c.grupoNombre}</strong> — ${c.turno}</div>
+                                <div><i class="ph ph-map-pin"></i> ${c.salon} &bull; ${c.dia} ${c.hora}</div>
+                                <div class="flex items-center gap-3 mt-2 pt-2 border-t border-current border-opacity-20">
+                                    <span><i class="ph ph-students"></i> ${alumnos.length} alumno${alumnos.length !== 1 ? 's' : ''}</span>
+                                    <span><i class="ph ph-calendar-check"></i> ${clasesRealizadas} sesión${clasesRealizadas !== 1 ? 'es' : ''}</span>
+                                </div>
+                            </div>
+                        </button>`;
+                    }).join('') + `</div>`;
+
+                // Guardar datos en window para acceder desde verReporteClase
+                window._profAlumnosPorGrupo   = alumnosPorGrupo;
+                window._profAsistMap           = asistMap;
+                window._profClasesRealizadasMap = clasesRealizadasMap;
+
+            } catch (err) {
+                document.getElementById('profClasesList').innerHTML = `
+                    <div class="text-center py-10 text-red-400">
+                        <i class="ph ph-warning-circle text-3xl mb-2"></i>
+                        <p class="text-sm">Error al cargar: ${err.message}</p>
+                    </div>`;
+            }
+        }
+
+        window.verReporteClase = (grupoId, materia, grupoNombre, turno, salon) => {
+            const panel    = document.getElementById('profAlumnosPanel');
+            const content  = document.getElementById('profAlumnosContent');
+            const title    = document.getElementById('profAlumnosPanelTitle');
+            const sub      = document.getElementById('profAlumnosPanelSub');
+            const badges   = document.getElementById('profAlumnosPanelBadges');
+
+            // Resaltar card seleccionada
+            document.querySelectorAll('.clase-card').forEach(c => c.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500'));
+            const key = grupoId + '_' + materia.replace(/[^a-z0-9]/gi,'_');
+            const card = document.querySelector(`[data-clase-id="${key}"]`);
+            if (card) card.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            const alumnos = window._profAlumnosPorGrupo[grupoId] || [];
+            const asistMap = window._profAsistMap || {};
+            const claveClase = grupoId + '||' + materia;
+            const clasesRealizadas = window._profClasesRealizadasMap?.[claveClase]?.size || 0;
+
+            title.textContent = materia;
+            sub.textContent   = `Grupo ${grupoNombre} (${turno}) · ${salon}`;
+
+            // Badges resumen
+            const totalAlumnos = alumnos.length;
+            let totalAsistAcum = 0;
+            alumnos.forEach(s => {
+                const clave = claveClase + '||' + s.id;
+                totalAsistAcum += asistMap[clave]?.size || 0;
+            });
+            const promedioAsist = totalAlumnos > 0 && clasesRealizadas > 0
+                ? Math.round((totalAsistAcum / (totalAlumnos * clasesRealizadas)) * 100) : 0;
+
+            // Guardar contexto para exportar
+            window._reporteActual = { grupoId, materia, grupoNombre, turno, salon, clasesRealizadas, alumnos, asistMap, claveClase };
+
+            badges.innerHTML = `
+                <span class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full">
+                    <i class="ph ph-calendar-check"></i> ${clasesRealizadas} sesión${clasesRealizadas!==1?'es':''}
+                </span>
+                <span class="text-xs font-bold ${promedioAsist >= 70 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'} border px-3 py-1.5 rounded-full">
+                    <i class="ph ph-chart-pie"></i> ${promedioAsist}% promedio
+                </span>
+                <span class="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full">
+                    <i class="ph ph-students"></i> ${totalAlumnos} alumno${totalAlumnos!==1?'s':''}
+                </span>
+                <button onclick="exportarReporteCSV()"
+                    class="text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                    <i class="ph ph-file-csv"></i> CSV
+                </button>
+                <button onclick="exportarReportePDF()"
+                    class="text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                    <i class="ph ph-file-pdf"></i> PDF
+                </button>
+            `;
+
+            if (alumnos.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="ph ph-users text-5xl mb-3 opacity-30"></i>
+                        <p class="font-medium">No hay alumnos asignados a este grupo todavía.</p>
+                    </div>`;
+                return;
+            }
+
+            // Agrupar alumnos por carrera
+            const porCarrera = {};
+            alumnos.forEach(s => {
+                const carrera = s.carrera || 'Sin carrera';
+                if (!porCarrera[carrera]) porCarrera[carrera] = [];
+                porCarrera[carrera].push(s);
+            });
+
+            const coloresCarrera = ['blue','purple','emerald','amber','rose','cyan','indigo','orange'];
+            const carreraKeys = Object.keys(porCarrera).sort();
+
+            let html = '';
+            carreraKeys.forEach((carrera, ci) => {
+                const color = coloresCarrera[ci % coloresCarrera.length];
+                const alumnosCarrera = porCarrera[carrera];
+
+                // Calcular stats de carrera
+                let totalAsistCarrera = 0;
+                alumnosCarrera.forEach(s => {
+                    const clave = claveClase + '||' + s.id;
+                    totalAsistCarrera += asistMap[clave]?.size || 0;
+                });
+                const maxPosibleCarrera = alumnosCarrera.length * clasesRealizadas;
+                const pctCarrera = maxPosibleCarrera > 0 ? Math.round((totalAsistCarrera / maxPosibleCarrera) * 100) : 0;
+
+                html += `
+                <div class="mb-6">
+                    <!-- Header carrera -->
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-${color}-400 inline-block"></span>
+                            <h4 class="font-bold text-slate-800">${carrera}</h4>
+                            <span class="text-xs text-slate-500">(${alumnosCarrera.length} alumno${alumnosCarrera.length!==1?'s':''})</span>
+                        </div>
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full border
+                            ${pctCarrera >= 70 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'}">
+                            ${pctCarrera}% asistencia
+                        </span>
+                    </div>
+
+                    <!-- Tabla alumnos -->
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Alumno</th>
+                                    <th class="px-4 py-3 text-center">Asistencias</th>
+                                    <th class="px-4 py-3 text-center">Faltas</th>
+                                    <th class="px-4 py-3 text-center">Porcentaje</th>
+                                    <th class="px-4 py-3 text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${alumnosCarrera.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'')).map(s => {
+                                    const clave = claveClase + '||' + s.id;
+                                    const asistencias = asistMap[clave]?.size || 0;
+                                    const faltas = Math.max(0, clasesRealizadas - asistencias);
+                                    const pct = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
+                                    const ok = pct >= 70;
+                                    const barColor = pct >= 80 ? 'bg-green-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
+                                    return `
+                                    <tr class="border-t hover:bg-slate-50 transition">
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-3">
+                                                <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=3b82f6&color=fff'}"
+                                                     class="w-8 h-8 rounded-full border border-${color}-200 flex-shrink-0">
+                                                <div>
+                                                    <div class="font-semibold text-slate-800 leading-tight">${s.nombre || '—'}</div>
+                                                    <div class="text-[10px] text-slate-400 font-mono">${s.matricula || '—'}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="font-bold text-green-600">${asistencias}</span>
+                                            <span class="text-slate-400 text-xs">/ ${clasesRealizadas}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="font-bold ${faltas > 0 ? 'text-red-500' : 'text-slate-400'}">${faltas}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center min-w-[120px]">
+                                            <div class="flex items-center gap-2">
+                                                <div class="flex-grow bg-slate-100 rounded-full h-2">
+                                                    <div class="${barColor} h-2 rounded-full transition-all" style="width:${pct}%"></div>
+                                                </div>
+                                                <span class="font-bold text-xs min-w-[32px]">${pct}%</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${clasesRealizadas === 0
+                                                ? '<span class="text-xs text-slate-400">Sin sesiones</span>'
+                                                : ok
+                                                    ? '<span class="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">Regular</span>'
+                                                    : '<span class="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">⚠ En riesgo</span>'
+                                            }
+                                        </td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            });
+
+            content.innerHTML = html || '<div class="text-center py-8 text-slate-400">Sin datos.</div>';
+        };
+
         // ==========================================
         //  UI Y UTILIDADES GLOBALES
         // ==========================================
         window.logout = () => { currentStudent = null; sessionStorage.removeItem('2fa_verified'); updateAuthUI(); router('home'); }
         window.logoutAdmin = () => { currentAdmin = null; updateAuthUI(); router('home'); };
+        // ── EXPORTAR REPORTE CSV ────────────────────────────────
+        window.exportarReporteCSV = () => {
+            const r = window._reporteActual;
+            if (!r) return;
+
+            const { materia, grupoNombre, turno, salon, clasesRealizadas, alumnos, asistMap, claveClase } = r;
+
+            const filas = [
+                ['=== REPORTE DE ASISTENCIA ===', '', '', '', '', ''],
+                [`Materia: ${materia}`, '', `Grupo: ${grupoNombre}`, '', `Turno: ${turno}`, `Salón: ${salon}`],
+                [`Sesiones realizadas: ${clasesRealizadas}`, '', `Total alumnos: ${alumnos.length}`, '', `Fecha: ${new Date().toLocaleDateString('es-MX')}`, ''],
+                ['', '', '', '', '', ''],
+                ['Nombre', 'Matrícula', 'Carrera', 'Asistencias', 'Faltas', 'Porcentaje', 'Estado'],
+            ];
+
+            alumnos.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).forEach(s => {
+                const clave = claveClase + '||' + s.id;
+                const asistencias = asistMap[clave]?.size || 0;
+                const faltas = Math.max(0, clasesRealizadas - asistencias);
+                const pct = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
+                const estado = clasesRealizadas === 0 ? 'Sin sesiones' : pct >= 70 ? 'Regular' : 'En riesgo';
+                filas.push([
+                    s.nombre || '—',
+                    s.matricula || '—',
+                    s.carrera || '—',
+                    asistencias,
+                    faltas,
+                    pct + '%',
+                    estado
+                ]);
+            });
+
+            const csv = filas.map(r => r.map(c => `"${c}"`).join(',')).join('');
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${materia.replace(/[^a-z0-9]/gi,'_')}_${grupoNombre}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // ── EXPORTAR REPORTE PDF ────────────────────────────────
+        window.exportarReportePDF = async () => {
+            const r = window._reporteActual;
+            if (!r) return;
+
+            const { materia, grupoNombre, turno, salon, clasesRealizadas, alumnos, asistMap, claveClase } = r;
+            const prof = window.currentProfesor || {};
+
+            // Calcular promedio
+            let totalAsist = 0;
+            alumnos.forEach(s => {
+                const clave = claveClase + '||' + s.id;
+                totalAsist += asistMap[clave]?.size || 0;
+            });
+            const promedio = alumnos.length > 0 && clasesRealizadas > 0
+                ? Math.round((totalAsist / (alumnos.length * clasesRealizadas)) * 100) : 0;
+
+            // Cargar jsPDF dinámicamente
+            const loadScript = (src) => new Promise((res, rej) => {
+                if (document.querySelector(`script[src="${src}"]`)) return res();
+                const s = document.createElement('script');
+                s.src = src; s.onload = res; s.onerror = rej;
+                document.head.appendChild(s);
+            });
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            // ── Encabezado ──
+            pdf.setFillColor(15, 23, 42); // slate-900
+            pdf.rect(0, 0, 210, 36, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
+            pdf.text('CredencialesUTN', 14, 13);
+            pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(148, 163, 184); // slate-400
+            pdf.text('Reporte de Asistencia', 14, 20);
+
+            // Datos del reporte en el encabezado
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(8);
+            pdf.text(`Materia: ${materia}`, 14, 28);
+            pdf.text(`Grupo: ${grupoNombre}  ·  Turno: ${turno}  ·  Salón: ${salon}`, 14, 33);
+            pdf.text(`Docente: ${prof.nombre || '—'}  ·  Sesiones: ${clasesRealizadas}  ·  Promedio: ${promedio}%`, 120, 28);
+            pdf.text(`Fecha: ${new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'long', year:'numeric'})}`, 120, 33);
+
+            // ── Tabla ──
+            const filas = alumnos
+                .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+                .map((s, idx) => {
+                    const clave = claveClase + '||' + s.id;
+                    const asistencias = asistMap[clave]?.size || 0;
+                    const faltas = Math.max(0, clasesRealizadas - asistencias);
+                    const pct = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
+                    const estado = clasesRealizadas === 0 ? 'Sin sesiones' : pct >= 70 ? 'Regular' : 'En riesgo';
+                    return [idx + 1, s.nombre || '—', s.matricula || '—', s.carrera || '—', asistencias, faltas, pct + '%', estado];
+                });
+
+            pdf.autoTable({
+                startY: 42,
+                head: [['#', 'Nombre', 'Matrícula', 'Carrera', 'Asist.', 'Faltas', '%', 'Estado']],
+                body: filas,
+                styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+                headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' }, // slate-800
+                alternateRowStyles: { fillColor: [248, 250, 252] }, // slate-50
+                columnStyles: {
+                    0: { cellWidth: 8, halign: 'center' },
+                    1: { cellWidth: 52 },
+                    2: { cellWidth: 22, halign: 'center' },
+                    3: { cellWidth: 35 },
+                    4: { cellWidth: 14, halign: 'center' },
+                    5: { cellWidth: 14, halign: 'center' },
+                    6: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+                    7: { cellWidth: 22, halign: 'center' },
+                },
+                didDrawCell: (data) => {
+                    // Colorear celda de estado y porcentaje
+                    if (data.section === 'body' && data.column.index === 7) {
+                        const val = data.cell.raw;
+                        if (val === 'En riesgo') {
+                            pdf.setFillColor(254, 226, 226); // red-100
+                            pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                            pdf.setTextColor(185, 28, 28); // red-700
+                            pdf.setFontSize(7.5);
+                            pdf.text('En riesgo', data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 1, { align: 'center' });
+                            pdf.setTextColor(0);
+                        } else if (val === 'Regular') {
+                            pdf.setFillColor(220, 252, 231); // green-100
+                            pdf.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                            pdf.setTextColor(21, 128, 61); // green-700
+                            pdf.setFontSize(7.5);
+                            pdf.text('Regular', data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 1, { align: 'center' });
+                            pdf.setTextColor(0);
+                        }
+                    }
+                }
+            });
+
+            // ── Pie de página ──
+            const pageH = pdf.internal.pageSize.height;
+            pdf.setFontSize(7); pdf.setTextColor(148, 163, 184);
+            pdf.text('CredencialesUTN — Documento generado automáticamente', 14, pageH - 8);
+            pdf.text(`Pág. 1 de ${pdf.internal.getNumberOfPages()}`, 196, pageH - 8, { align: 'right' });
+
+            pdf.save(`Reporte_${materia.replace(/[^a-z0-9]/gi,'_')}_${grupoNombre}.pdf`);
+        };
+
+        window.logoutProfesor = () => { currentProfesor = null; updateAuthUI(); router('home'); };
 
         function updateAuthUI() {
             const btn = document.getElementById('authButtonContainer');
             if (currentAdmin) {
                 btn.innerHTML = `<button onclick="router('adminPanel')" class="bg-red-50 text-red-600 font-bold text-sm flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 shadow-sm hover:bg-red-100 transition"><i class="ph ph-shield-star text-lg"></i> Panel Rectoría</button>`;
+            } else if (currentProfesor) {
+                btn.innerHTML = `<button onclick="router('profesorDashboard')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2 rounded-lg flex items-center gap-2 shadow transition"><i class="ph ph-chalkboard-teacher"></i> Mi Área</button>`;
             } else if (currentStudent) {
                 btn.innerHTML = `<button onclick="router('dashboard')" class="bg-green-700 hover:bg-green-800 text-white font-bold text-sm px-5 py-2 rounded-lg flex items-center gap-2 shadow transition"><i class="ph ph-user"></i> Mi Perfil</button>`;
             } else {
                 btn.innerHTML = `
                     <div class="flex items-center gap-2">
                         <button onclick="router('login')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center gap-2 shadow-sm"><i class="ph ph-sign-in"></i> Acceso</button>
+                        <button onclick="router('profesorLogin')" class="border border-blue-200 text-blue-600 bg-blue-50 px-3 py-2 rounded-lg text-sm hover:bg-blue-100 transition flex items-center shadow-sm" title="Portal Docente"><i class="ph ph-chalkboard-teacher text-lg"></i></button>
                         <button onclick="router('adminLogin')" class="border border-red-200 text-red-500 bg-red-50 px-3 py-2 rounded-lg text-sm hover:bg-red-100 hover:text-red-600 transition flex items-center shadow-sm" title="Portal Rectoría"><i class="ph ph-shield-star text-lg"></i></button>
                     </div>`;
             }
