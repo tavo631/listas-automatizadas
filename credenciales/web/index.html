@@ -1127,6 +1127,12 @@
             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('text-green-700', 'font-bold'));
             if(document.getElementById(`nav-${route}`)) document.getElementById(`nav-${route}`).classList.add('text-green-700', 'font-bold');
 
+            // Detener auto-refresh al navegar a cualquier ruta
+            if (window._autoRefreshReporte) {
+                clearInterval(window._autoRefreshReporte);
+                window._autoRefreshReporte = null;
+            }
+
             if (route === 'dashboard') {
                 if (!currentStudent) { router('login'); return; }
                 renderDashboard();
@@ -1630,39 +1636,55 @@
                 const asistSnap = await getDocs(query(getCol('asistencias'), where('alumnoId','==', s.id)));
                 const sesionesSnap = await getDocs(query(getCol('sesiones_scan'), where('grupoId','==', s.grupoId)));
 
-                // Sesiones del grupo por materia — con fecha y docente
-                const sesionesXmateria = {}; // materia → [ { id, fecha, profNombre } ]
+                // Sesiones del grupo por materia — deduplicadas por día (solo la ÚLTIMA del día cuenta)
+                const sesionesXmateria = {}; // materia → [ { id, fecha, profNombre } ] — una por día
                 sesionesSnap.forEach(d => {
                     const ses = d.data();
-                    if (!ses.materia) return;
-                    if (!sesionesXmateria[ses.materia]) sesionesXmateria[ses.materia] = [];
-                    sesionesXmateria[ses.materia].push({ id: d.id, fecha: ses.iniciada, profNombre: ses.profNombre || '—' });
+                    if (!ses.materia || !ses.iniciada) return;
+                    if (!sesionesXmateria[ses.materia]) sesionesXmateria[ses.materia] = {};
+                    const dia = ses.iniciada.split('T')[0];
+                    // Sobreescribir con la más reciente del mismo día
+                    const prev = sesionesXmateria[ses.materia][dia];
+                    if (!prev || new Date(ses.iniciada) > new Date(prev.fecha)) {
+                        sesionesXmateria[ses.materia][dia] = { id: d.id, fecha: ses.iniciada, profNombre: ses.profNombre || '—' };
+                    }
+                });
+                // Convertir de mapa por día a array ordenado por fecha
+                Object.keys(sesionesXmateria).forEach(mat => {
+                    sesionesXmateria[mat] = Object.values(sesionesXmateria[mat])
+                        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
                 });
 
-                // Asistencias del alumno por materia — deduplicadas por sesionId
-                // Si no hay sesionId, se deduplica por fecha del día (YYYY-MM-DD)
+                // Asistencias del alumno por materia — deduplicadas por DÍA (una asistencia por día máximo)
                 const asistXmateria = {};
                 asistSnap.forEach(d => {
                     const a = d.data();
-                    if (!a.materia) return;
+                    if (!a.materia || !a.fecha) return;
+                    const fechaDia = a.fecha.split('T')[0];
                     if (!asistXmateria[a.materia]) asistXmateria[a.materia] = {
                         asistencias: 0, retardos: 0,
-                        fechasAsist: new Set(),  // fechas YYYY-MM-DD donde asistió
-                        sesionesVistas: new Set(), // sesionIds ya contadas
-                        registros: []            // un registro por sesión
+                        diasContados: new Set(),  // días ya contados (para no duplicar)
+                        diasAsist: new Set(),      // días donde asistió (no falta)
+                        registros: {}              // fechaDia → { tipo, fecha } — el más reciente del día
                     };
-
                     const mat = asistXmateria[a.materia];
-                    // Usar sesionId como clave de deduplicación, o fecha del día si no existe
-                    const claveUnica = a.sesionId || (a.fecha || '').split('T')[0];
-                    if (!claveUnica || mat.sesionesVistas.has(claveUnica)) return; // ya contada
-                    mat.sesionesVistas.add(claveUnica);
-
-                    const fechaDia = (a.fecha || '').split('T')[0];
-                    mat.asistencias++;
-                    mat.fechasAsist.add(fechaDia);
-                    if (a.tipo === 'retardo') mat.retardos++;
-                    mat.registros.push({ fecha: a.fecha, tipo: a.tipo || 'puntual', sesionId: a.sesionId });
+                    // Guardar el registro más reciente de cada día
+                    const prevReg = mat.registros[fechaDia];
+                    if (!prevReg || new Date(a.fecha) > new Date(prevReg.fecha)) {
+                        mat.registros[fechaDia] = { tipo: a.tipo || 'falta', fecha: a.fecha };
+                    }
+                });
+                // Calcular totales usando solo el registro más reciente de cada día
+                Object.keys(asistXmateria).forEach(materia => {
+                    const mat = asistXmateria[materia];
+                    Object.entries(mat.registros).forEach(([dia, reg]) => {
+                        mat.diasContados.add(dia);
+                        if (reg.tipo !== 'falta') {
+                            mat.asistencias++;
+                            mat.diasAsist.add(dia);
+                            if (reg.tipo === 'retardo') mat.retardos++;
+                        }
+                    });
                 });
 
                 // Materias únicas del horario del grupo
@@ -1676,7 +1698,7 @@
                         const bloque   = bloques.find(b => b.materia === materia);
                         const sesList  = sesionesXmateria[materia] || [];
                         const sesiones = sesList.length;
-                        const datos    = asistXmateria[materia] || { asistencias: 0, retardos: 0, fechasAsist: new Set(), registros: [] };
+                        const datos    = asistXmateria[materia] || { asistencias: 0, retardos: 0, diasAsist: new Set(), registros: {} };
                         const asist    = datos.asistencias;
                         const retardos = datos.retardos;
                         const faltas   = Math.max(0, sesiones - asist);
@@ -1685,37 +1707,21 @@
                         const estado   = sesiones === 0 ? 'Sin sesiones' : pct >= 70 ? 'Regular' : 'En riesgo';
                         totalAsist += asist; totalSesiones += sesiones;
 
-                        // Construir detalle por sesión (una entrada por sesión realizada)
-                        // Mapear sesionId → tipo de registro del alumno
-                        const registroXsesion = {};
-                        (datos.registros || []).forEach(r => {
-                            const clave = r.sesionId || (r.fecha||'').split('T')[0];
-                            if (clave && !registroXsesion[clave]) {
-                                registroXsesion[clave] = r.tipo || 'puntual';
-                            }
-                        });
-
-                        const detalleHTML = sesList
-                            .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
-                            .map(ses => {
-                                const claveUnica = ses.id || (ses.fecha||'').split('T')[0];
-                                const tipo = registroXsesion[claveUnica];
-                                const asistio = !!tipo;
-                                const esRetardo = tipo === 'retardo';
-                                const diaStr = (ses.fecha || '').split('T')[0];
-                                const fechaLabel = diaStr
-                                    ? new Date(diaStr + 'T12:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'})
-                                    : '—';
-                                if (asistio) {
-                                    return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg ${esRetardo?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}" title="${esRetardo?'Retardo':'Puntual'}">
-                                        ${esRetardo?'⏰':'✓'} ${fechaLabel}
-                                    </span>`;
-                                } else {
-                                    return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600" title="Falta">
-                                        ✗ ${fechaLabel}
-                                    </span>`;
-                                }
-                            }).join('');
+                        // Construir chips: una por sesión del día, con el registro más reciente de ese día
+                        const detalleHTML = sesList.map(ses => {
+                            const diaStr     = (ses.fecha || '').split('T')[0];
+                            const reg        = (datos.registros || {})[diaStr];
+                            const tipo       = reg ? reg.tipo : 'falta';
+                            const fechaLabel = diaStr
+                                ? new Date(diaStr + 'T12:00:00').toLocaleDateString('es-MX', { weekday:'short', day:'2-digit', month:'short' })
+                                : '—';
+                            if (tipo === 'puntual') return `
+                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700">✓ ${fechaLabel}</span>`;
+                            if (tipo === 'retardo') return `
+                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-100 text-amber-700">⏰ ${fechaLabel}</span>`;
+                            return `
+                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600">✗ ${fechaLabel}</span>`;
+                        }).join('');
 
                         return { materia, bloque, sesiones, asist, retardos, faltas, pct, barColor, estado, detalleHTML };
                     });
@@ -4346,34 +4352,62 @@
                 });
 
                 // clasesRealizadasMap: claveClase -> Set de fechas (YYYY-MM-DD) de sesiones realizadas
-                // Usamos fecha del dia en ambos mapas para garantizar que coincidan siempre,
-                // sin importar si sesionId cambio o no existe en asistencias antiguas.
                 const clasesRealizadasMap = {};
+                const sesionesListMap = {}; // claveClase -> [ { id, fecha, iniciada, hora } ] ordenado por fecha
                 sesionesSnap.forEach(d => {
                     const s = d.data();
                     if (!s.grupoId || !s.materia || !s.iniciada) return;
                     const claveClase = s.grupoId + '||' + s.materia;
                     if (!clasesRealizadasMap[claveClase]) clasesRealizadasMap[claveClase] = new Set();
-                    // Guardar la fecha del dia de la sesion
                     clasesRealizadasMap[claveClase].add(s.iniciada.split('T')[0]);
+                    if (!sesionesListMap[claveClase]) sesionesListMap[claveClase] = [];
+                    sesionesListMap[claveClase].push({ id: d.id, iniciada: s.iniciada, hora: s.hora || '' });
+                });
+                // Ordenar por fecha ascendente y deduplicar por día — solo la ÚLTIMA sesión de cada día
+                Object.keys(sesionesListMap).forEach(ck => {
+                    sesionesListMap[ck].sort((a,b) => new Date(a.iniciada) - new Date(b.iniciada));
+                    const porDia = {};
+                    sesionesListMap[ck].forEach(ses => {
+                        const dia = ses.iniciada.split('T')[0];
+                        porDia[dia] = ses; // sobreescribe con la más reciente del mismo día
+                    });
+                    sesionesListMap[ck] = Object.values(porDia).sort((a,b) => new Date(a.iniciada) - new Date(b.iniciada));
                 });
 
                 // asistMap: claveAlumno -> Set de fechas (YYYY-MM-DD) de asistencias
                 // Mismo criterio de fecha que clasesRealizadasMap para que el match sea correcto.
                 const asistMap = {};
                 const retardoMap = {};
+                const detalleMap = {}; // claveAlumno -> [ { fecha, tipo, hora, sesionId } ]
                 asistSnap.forEach(d => {
                     const a = d.data();
                     if (!a.grupoId || !a.materia || !a.alumnoId || !a.fecha) return;
                     const claveClase  = a.grupoId + '||' + a.materia;
                     const claveAlumno = claveClase + '||' + a.alumnoId;
                     const fechaDia    = a.fecha.split('T')[0];
-                    if (!asistMap[claveAlumno]) asistMap[claveAlumno] = new Set();
-                    asistMap[claveAlumno].add(fechaDia);   // deduplicado por dia automaticamente
+                    if (a.tipo !== 'falta') {
+                        if (!asistMap[claveAlumno]) asistMap[claveAlumno] = new Set();
+                        asistMap[claveAlumno].add(fechaDia);
+                    }
                     if (a.tipo === 'retardo') {
                         if (!retardoMap[claveAlumno]) retardoMap[claveAlumno] = new Set();
                         retardoMap[claveAlumno].add(fechaDia);
                     }
+                    // Guardar detalle completo para expandir
+                    if (!detalleMap[claveAlumno]) detalleMap[claveAlumno] = [];
+                    detalleMap[claveAlumno].push({
+                        fecha:   a.fecha,
+                        fechaDia,
+                        tipo:    a.tipo || 'falta',
+                        minutos: a.minutosDesdeInicio || 0,
+                        sesionId: a.sesionId || ''
+                    });
+                });
+
+                // sesionesDetalleMap: sesionId -> { iniciada, hora, materia, grupoId }
+                const sesionesDetalleMap = {};
+                sesionesSnap.forEach(d => {
+                    sesionesDetalleMap[d.id] = d.data();
                 });
 
                 // Encontrar clases que imparte este profesor
@@ -4478,6 +4512,9 @@
                 window._profAlumnosPorGrupo    = alumnosPorGrupo;
                 window._profAsistMap            = asistMap;
                 window._profRetardoMap          = retardoMap;
+                window._profDetalleMap          = detalleMap;
+                window._profSesionesDetalle     = sesionesDetalleMap;
+                window._profSesionesListMap     = sesionesListMap;
                 window._profClasesRealizadasMap = clasesRealizadasMap;
 
             } catch (err) {
@@ -4536,6 +4573,10 @@
                 <span class="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full">
                     <i class="ph ph-students"></i> ${totalAlumnos} alumno${totalAlumnos!==1?'s':''}
                 </span>
+                <button onclick="refrescarReporte('${grupoId}','${materia.replace(/'/g,"\\'")}','${grupoNombre}','${turno}','${salon}')"
+                    class="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                    <i class="ph ph-arrows-clockwise"></i> Actualizar
+                </button>
                 <button onclick="exportarReporteCSV()"
                     class="text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full transition flex items-center gap-1">
                     <i class="ph ph-file-csv"></i> CSV
@@ -4545,6 +4586,20 @@
                     <i class="ph ph-file-pdf"></i> PDF
                 </button>
             `;
+
+            // Auto-refresh cada 15s si hay sesión activa de esta clase
+            if (window._autoRefreshReporte) clearInterval(window._autoRefreshReporte);
+            window._autoRefreshReporte = setInterval(() => {
+                const sesActiva = window._sesionActiva;
+                // Solo auto-refrescar si hay sesión activa Y es de esta misma clase
+                if (sesActiva && sesActiva.grupoId === grupoId && sesActiva.materia === materia) {
+                    refrescarReporte(grupoId, materia, grupoNombre, turno, salon);
+                } else {
+                    // Detener si ya no hay sesión activa de esta clase
+                    clearInterval(window._autoRefreshReporte);
+                    window._autoRefreshReporte = null;
+                }
+            }, 15000);
 
             if (alumnos.length === 0) {
                 content.innerHTML = `
@@ -4609,18 +4664,51 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${alumnosCarrera.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'')).map(s => {
-                                    const clave = claveClase + '||' + s.id;
+                                ${alumnosCarrera.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'')).map((s, idx) => {
+                                    const clave      = claveClase + '||' + s.id;
                                     const asistencias = asistMap[clave]?.size || 0;
-                                    const retardos = (window._profRetardoMap || {})[clave]?.size || 0;
-                                    const faltas = Math.max(0, clasesRealizadas - asistencias);
-                                    const pct = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
-                                    const ok = pct >= 70;
-                                    const barColor = pct >= 80 ? 'bg-green-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
+                                    const retardos   = (window._profRetardoMap || {})[clave]?.size || 0;
+                                    const faltas     = Math.max(0, clasesRealizadas - asistencias);
+                                    const pct        = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
+                                    const ok         = pct >= 70;
+                                    const barColor   = pct >= 80 ? 'bg-green-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
+                                    const rowId      = `rpc-${grupoId.slice(-4)}-${s.id.slice(-4)}-${idx}`;
+
+                                    // Detalle sesión por sesión
+                                    const sesiones     = (window._profSesionesListMap || {})[claveClase] || [];
+                                    const registros    = (window._profDetalleMap || {})[clave] || [];
+                                    const regPorFecha  = {};
+                                    registros.forEach(r => { regPorFecha[r.fechaDia] = r; });
+
+                                    const chipsHTML = sesiones.length === 0
+                                        ? '<span class="text-[10px] text-slate-400">Sin sesiones registradas.</span>'
+                                        : sesiones.map((ses, si) => {
+                                            const fechaDia = ses.iniciada.split('T')[0];
+                                            const fechaLabel = new Date(fechaDia + 'T12:00:00').toLocaleDateString('es-MX', { weekday:'short', day:'2-digit', month:'short' });
+                                            const horaInicio = ses.hora || new Date(ses.iniciada).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+                                            const reg = regPorFecha[fechaDia];
+                                            const tipo = reg ? reg.tipo : 'falta';
+                                            const minutos = reg?.minutos || 0;
+
+                                            if (tipo === 'puntual') return `
+                                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1.5 rounded-xl bg-green-100 text-green-800 border border-green-200" title="Sesión ${si+1} — ${fechaLabel} ${horaInicio}">
+                                                    ✓ ${fechaLabel}<span class="opacity-60 font-normal">${horaInicio}</span>
+                                                </span>`;
+                                            if (tipo === 'retardo') return `
+                                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1.5 rounded-xl bg-amber-100 text-amber-800 border border-amber-200" title="Llegó ${minutos} min tarde">
+                                                    ⏰ ${fechaLabel}<span class="opacity-60 font-normal">+${minutos}min</span>
+                                                </span>`;
+                                            return `
+                                                <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1.5 rounded-xl bg-red-100 text-red-700 border border-red-200" title="Falta — ${fechaLabel}">
+                                                    ✗ ${fechaLabel}<span class="opacity-60 font-normal">${horaInicio}</span>
+                                                </span>`;
+                                        }).join('');
+
                                     return `
-                                    <tr class="border-t hover:bg-slate-50 transition">
+                                    <tr class="border-t hover:bg-slate-50 transition cursor-pointer" onclick="toggleReporteDetalle('${rowId}')">
                                         <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
+                                                <i id="chev-${rowId}" class="ph ph-caret-right text-slate-400 transition-transform flex-shrink-0 text-xs"></i>
                                                 <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=3b82f6&color=fff'}"
                                                      class="w-8 h-8 rounded-full border border-${color}-200 flex-shrink-0">
                                                 <div>
@@ -4657,6 +4745,18 @@
                                                     : '<span class="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">⚠ En riesgo</span>'
                                             }
                                         </td>
+                                    </tr>
+                                    <!-- Fila expandible detalle sesión por sesión -->
+                                    <tr id="det-${rowId}" class="hidden">
+                                        <td colspan="6" class="px-6 py-3 bg-slate-50 border-b border-slate-100">
+                                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                                Historial por sesión —
+                                                <span class="text-green-600">✓ Puntual</span> &nbsp;
+                                                <span class="text-amber-600">⏰ Retardo</span> &nbsp;
+                                                <span class="text-red-500">✗ Falta</span>
+                                            </p>
+                                            <div class="flex flex-wrap gap-1.5">${chipsHTML}</div>
+                                        </td>
                                     </tr>`;
                                 }).join('')}
                             </tbody>
@@ -4666,6 +4766,97 @@
             });
 
             content.innerHTML = html || '<div class="text-center py-8 text-slate-400">Sin datos.</div>';
+
+            // Añadir hint de expandir
+            content.insertAdjacentHTML('beforeend', `
+                <p class="text-[10px] text-slate-400 text-center mt-3 pb-1">
+                    <i class="ph ph-caret-right"></i> Toca un alumno para ver su historial sesión por sesión
+                </p>`);
+        };
+
+        window.toggleReporteDetalle = (rowId) => {
+            const det  = document.getElementById('det-' + rowId);
+            const chev = document.getElementById('chev-' + rowId);
+            if (!det) return;
+            det.classList.toggle('hidden');
+            if (chev) chev.style.transform = det.classList.contains('hidden') ? '' : 'rotate(90deg)';
+        };
+
+        // Refresca los datos del reporte recargando desde Firestore
+        window.refrescarReporte = async (grupoId, materia, grupoNombre, turno, salon) => {
+            const btn = document.querySelector('[onclick*="refrescarReporte"]');
+            if (btn) { btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Actualizando...'; btn.disabled = true; }
+
+            try {
+                // Recargar todos los snapshots necesarios
+                const [asistSnap, sesSnap, studSnap] = await Promise.all([
+                    getDocs(getCol('asistencias')),
+                    getDocs(getCol('sesiones_scan')),
+                    getDocs(getCol('students'))
+                ]);
+
+                // Reconstruir mapas
+                const alumnosPorGrupo = {};
+                studSnap.forEach(d => {
+                    const s = { id: d.id, ...d.data() };
+                    if (s.grupoId) {
+                        if (!alumnosPorGrupo[s.grupoId]) alumnosPorGrupo[s.grupoId] = [];
+                        alumnosPorGrupo[s.grupoId].push(s);
+                    }
+                });
+
+                const clasesRealizadasMap = {};
+                const sesionesListMap = {};
+                sesSnap.forEach(d => {
+                    const s = d.data();
+                    if (!s.grupoId || !s.materia || !s.iniciada) return;
+                    const ck = s.grupoId + '||' + s.materia;
+                    if (!clasesRealizadasMap[ck]) clasesRealizadasMap[ck] = new Set();
+                    clasesRealizadasMap[ck].add(s.iniciada.split('T')[0]);
+                    if (!sesionesListMap[ck]) sesionesListMap[ck] = [];
+                    sesionesListMap[ck].push({ id: d.id, iniciada: s.iniciada, hora: s.hora || '' });
+                });
+                Object.keys(sesionesListMap).forEach(ck => {
+                    sesionesListMap[ck].sort((a,b) => new Date(a.iniciada) - new Date(b.iniciada));
+                    const porDia = {};
+                    sesionesListMap[ck].forEach(ses => { porDia[ses.iniciada.split('T')[0]] = ses; });
+                    sesionesListMap[ck] = Object.values(porDia).sort((a,b) => new Date(a.iniciada) - new Date(b.iniciada));
+                });
+
+                const asistMap = {}, retardoMap = {}, detalleMap = {};
+                asistSnap.forEach(d => {
+                    const a = d.data();
+                    if (!a.grupoId || !a.materia || !a.alumnoId || !a.fecha) return;
+                    const ck = a.grupoId + '||' + a.materia;
+                    const cka = ck + '||' + a.alumnoId;
+                    const fd  = a.fecha.split('T')[0];
+                    if (a.tipo !== 'falta') {
+                        if (!asistMap[cka]) asistMap[cka] = new Set();
+                        asistMap[cka].add(fd);
+                    }
+                    if (a.tipo === 'retardo') {
+                        if (!retardoMap[cka]) retardoMap[cka] = new Set();
+                        retardoMap[cka].add(fd);
+                    }
+                    if (!detalleMap[cka]) detalleMap[cka] = [];
+                    detalleMap[cka].push({ fecha: a.fecha, fechaDia: fd, tipo: a.tipo||'falta', minutos: a.minutosDesdeInicio||0, sesionId: a.sesionId||'' });
+                });
+
+                // Actualizar window
+                window._profAlumnosPorGrupo    = alumnosPorGrupo;
+                window._profAsistMap            = asistMap;
+                window._profRetardoMap          = retardoMap;
+                window._profDetalleMap          = detalleMap;
+                window._profSesionesListMap     = sesionesListMap;
+                window._profClasesRealizadasMap = clasesRealizadasMap;
+
+                // Re-renderizar el reporte sin perder scroll
+                verReporteClase(grupoId, materia, grupoNombre, turno, salon);
+
+            } catch(e) {
+                if (btn) { btn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Actualizar'; btn.disabled = false; }
+                console.error('Error al refrescar:', e);
+            }
         };
 
         // ==========================================
@@ -4838,8 +5029,61 @@
 
             const [grupoId, materia, grupoNombre, turno, salon, hora] = claveVal.split('|||');
             const ahora  = new Date();
-            // Sin límite de tiempo — el profe la termina manualmente con el botón "Terminar"
-            const expira = new Date(ahora.getTime() + 8 * 60 * 60000); // 8 horas como tope técnico
+            const hoyStr = ahora.toISOString().split('T')[0];
+
+            // ── Verificar si ya se pasó lista de esta materia hoy ──
+            try {
+                const qHoy = query(
+                    getCol('sesiones_scan'),
+                    where('profId',  '==', currentProfesor.id),
+                    where('grupoId', '==', grupoId),
+                    where('materia', '==', materia)
+                );
+                const snapHoy = await getDocs(qHoy);
+                let sesionPrevia = null;
+                snapHoy.forEach(d => {
+                    const s = d.data();
+                    if ((s.iniciada || '').split('T')[0] === hoyStr) sesionPrevia = { id: d.id, ...s };
+                });
+
+                if (sesionPrevia) {
+                    // Mostrar modal de advertencia
+                    const confirmar = await mostrarModalAdvertenciaSesion(materia, grupoNombre, sesionPrevia.iniciada);
+                    if (!confirmar) return; // El profe canceló
+
+                    // Borrar TODOS los registros de asistencia de hoy para este grupo+materia
+                    // (sin importar de qué sesión vengan — lista limpia total)
+                    const qAsistPrev = query(
+                        getCol('asistencias'),
+                        where('grupoId', '==', grupoId),
+                        where('materia', '==', materia)
+                    );
+                    const snapAsistPrev = await getDocs(qAsistPrev);
+                    const deletes = [];
+                    snapAsistPrev.forEach(d => {
+                        const fechaDoc = (d.data().fecha || '').split('T')[0];
+                        if (fechaDoc === hoyStr) deletes.push(deleteDoc(doc(db, 'asistencias', d.id)));
+                    });
+                    await Promise.all(deletes);
+
+                    // Marcar TODAS las sesiones previas del día como inactivas
+                    const qSesHoy = query(
+                        getCol('sesiones_scan'),
+                        where('grupoId', '==', grupoId),
+                        where('materia', '==', materia)
+                    );
+                    const snapSesHoy = await getDocs(qSesHoy);
+                    const updatesSes = [];
+                    snapSesHoy.forEach(d => {
+                        const fechaSes = (d.data().iniciada || '').split('T')[0];
+                        if (fechaSes === hoyStr) updatesSes.push(updateDoc(doc(db, 'sesiones_scan', d.id), { activa: false }));
+                    });
+                    await Promise.all(updatesSes);
+                }
+            } catch(e) { /* Si falla la verificación, continuar igual */ }
+
+            // Sin límite de tiempo — el profe la termina manualmente
+            const expira = new Date(ahora.getTime() + 8 * 60 * 60000);
 
             const sesion = {
                 profId:       currentProfesor.id,
@@ -4853,16 +5097,62 @@
             };
 
             try {
-                // Desactivar sesiones previas del mismo profesor
+                // Desactivar sesiones activas previas del mismo profesor
                 const q = query(getCol('sesiones_scan'), where('profId','==', currentProfesor.id), where('activa','==', true));
                 const prev = await getDocs(q);
                 for (const d of prev.docs) await updateDoc(doc(db, 'sesiones_scan', d.id), { activa: false });
+
+                // Limpiar estado en memoria de sesión anterior
+                window._sesionAlumnos        = null;
+                window._sesionYaRegistrados  = null;
+                window._sesionDocIds         = null;
+                window._sesionRef            = null;
 
                 const docRef = await addDoc(getCol('sesiones_scan'), sesion);
                 sesion.id = docRef.id;
                 mostrarSesionActiva(sesion, expira);
             } catch(e) { alert('Error al iniciar sesión: ' + e.message); }
         };
+
+        // Modal de advertencia sesión previa del mismo día
+        function mostrarModalAdvertenciaSesion(materia, grupoNombre, iniciada) {
+            return new Promise(resolve => {
+                const prev = document.getElementById('modalAdvertenciaSesion');
+                if (prev) prev.remove();
+                const hora = iniciada ? new Date(iniciada).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
+                const overlay = document.createElement('div');
+                overlay.id = 'modalAdvertenciaSesion';
+                overlay.className = 'fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+                overlay.innerHTML = `
+                    <div class="bg-white rounded-2xl shadow-2xl border w-full max-w-sm overflow-hidden">
+                        <div class="bg-amber-500 p-5 text-white text-center">
+                            <div class="text-3xl mb-1">⚠️</div>
+                            <h3 class="font-bold text-lg">Sesión previa encontrada</h3>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <p class="text-slate-700 text-sm text-center leading-relaxed">
+                                Ya pasaste lista de <b>${materia}</b> — Grupo <b>${grupoNombre}</b> hoy a las <b>${hora}</b>.
+                            </p>
+                            <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 leading-relaxed">
+                                <i class="ph ph-warning-circle"></i> Si continúas, <b>se borrará la lista anterior</b> de hoy y tendrás que volver a registrar la asistencia de todos los alumnos — ya sea con matrícula, escáner USB o la lista manual.
+                            </div>
+                            <div class="flex gap-3">
+                                <button id="btnAdvertCancel"
+                                    class="flex-1 border border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50 transition text-sm">
+                                    Cancelar
+                                </button>
+                                <button id="btnAdvertConfirm"
+                                    class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition text-sm">
+                                    Sí, iniciar nueva lista
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+                document.body.appendChild(overlay);
+                document.getElementById('btnAdvertCancel').onclick  = () => { overlay.remove(); resolve(false); };
+                document.getElementById('btnAdvertConfirm').onclick = () => { overlay.remove(); resolve(true);  };
+            });
+        }
 
         function mostrarSesionActiva(sesion, expiraDate) {
             document.getElementById('sesionFormPanel').classList.add('hidden');
@@ -4882,6 +5172,22 @@
             if (ep) ep.textContent = '0';
             if (er) er.textContent = '0';
             if (et) et.textContent = '0';
+
+            // Limpiar historial de escaneos de sesión anterior
+            const histDiv   = document.getElementById('profScanHistorial');
+            const histLista = document.getElementById('profScanHistorialLista');
+            const histCount = document.getElementById('profScanHistorialCount');
+            if (histLista) histLista.innerHTML = '';
+            if (histCount) histCount.textContent = '';
+            if (histDiv)   histDiv.classList.add('hidden');
+
+            // Limpiar input del escáner
+            const scanInp = document.getElementById('profScanInput');
+            if (scanInp) { scanInp.value = ''; scanInp.disabled = false; }
+            const scanBtn = document.getElementById('btnProfScan');
+            if (scanBtn)  { scanBtn.disabled = true; }
+            const scanMsg = document.getElementById('profScanMsg');
+            if (scanMsg)  scanMsg.textContent = '';
 
             // Contador de tiempo transcurrido
             if (sesionTimer) clearInterval(sesionTimer);
@@ -4946,24 +5252,23 @@
                     return;
                 }
 
-                // 2. Leer registros de hoy para esta materia+grupo
+                // 2. Leer registros de ESTA sesión específica (por sesionId — sin caché, 100% frescos)
                 const qAsist = query(getCol('asistencias'),
-                    where('grupoId', '==', sesion.grupoId),
-                    where('materia', '==', sesion.materia));
+                    where('sesionId', '==', sesion.id));
                 const snapAsist = await getDocs(qAsist);
 
-                // docIdPorAlumno: alumnoId -> docId del registro de hoy (para actualizar, no duplicar)
+                // docIdPorAlumno: alumnoId -> docId del registro de esta sesión
                 const docIdPorAlumno = {};
                 const tipoPorAlumno  = {};
                 snapAsist.forEach(d => {
                     const a = d.data();
-                    if ((a.fecha || '').split('T')[0] === hoyStr) {
+                    if (a.alumnoId) {
                         docIdPorAlumno[a.alumnoId] = d.id;
                         tipoPorAlumno[a.alumnoId]  = a.tipo || 'falta';
                     }
                 });
 
-                // 3. Para cada alumno sin registro hoy → crear doc de falta en Firestore
+                // 3. Para cada alumno sin registro en esta sesión → crear doc de falta
                 const ahora = new Date();
                 const batch = [];
                 for (const alumno of alumnos) {
@@ -5026,25 +5331,41 @@
 
 
         function botonesAccionAlumno(alumnoId, matricula, nombre, carrera, grupoId, grupoNombre, estadoActual) {
-            // Usamos data-attributes en lugar de inyectar argumentos en onclick
-            // para evitar SyntaxError con nombres que tienen apostrofes, acentos, etc.
             const btnBase  = 'text-[10px] font-bold px-2 py-1.5 rounded-lg border transition-all flex items-center gap-1';
+
+            // Calcular si aún está en tolerancia para mostrar la etiqueta correcta en el botón
+            const sesion = window._sesionActiva;
+            let etiquetaPresente = 'Presente';
+            let enToleranciaTiempo = true;
+            if (sesion) {
+                const ahora = new Date();
+                const limiteRet = new Date(new Date(sesion.iniciada).getTime() + sesion.toleranciaMin * 60000);
+                enToleranciaTiempo = ahora <= limiteRet;
+                etiquetaPresente = enToleranciaTiempo ? '✓ Puntual' : '⏰ Retardo';
+            }
+
             const btnPres  = estadoActual === 'puntual'
                 ? `${btnBase} bg-green-600 text-white border-green-600 ring-2 ring-green-200`
-                : `${btnBase} bg-white text-green-700 border-green-300 hover:bg-green-50`;
-            const btnRet   = estadoActual === 'retardo'
-                ? `${btnBase} bg-amber-500 text-white border-amber-500 ring-2 ring-amber-200`
-                : `${btnBase} bg-white text-amber-600 border-amber-300 hover:bg-amber-50`;
+                : estadoActual === 'retardo'
+                    ? `${btnBase} bg-amber-500 text-white border-amber-500 ring-2 ring-amber-200`
+                    : `${btnBase} ${enToleranciaTiempo ? 'bg-white text-green-700 border-green-300 hover:bg-green-50' : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50'}`;
             const btnFalta = estadoActual === 'falta'
                 ? `${btnBase} bg-red-500 text-white border-red-500 ring-2 ring-red-200`
                 : `${btnBase} bg-white text-red-500 border-red-300 hover:bg-red-50`;
-            // Escapar para atributos HTML (solo &, ", < y >)
+
             const attr = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const dataAttrs = `data-aid="${attr(alumnoId)}" data-mat="${attr(matricula)}" data-nom="${attr(nombre)}" data-car="${attr(carrera)}" data-gid="${attr(grupoId)}" data-gnm="${attr(grupoNombre)}"`;
+
+            // Si ya está marcado (puntual o retardo), el botón de Falta muestra advertencia
+            const yaAsistio = estadoActual === 'puntual' || estadoActual === 'retardo';
+
             return `<div class="flex items-center gap-1 flex-shrink-0" id="alumno-badge-${alumnoId}">
-                <button class="${btnPres}" ${dataAttrs} data-tipo="puntual" onclick="window._btnAsist(this,event)"><i class="ph ph-check-circle"></i> Presente</button>
-                <button class="${btnRet}"  ${dataAttrs} data-tipo="retardo" onclick="window._btnAsist(this,event)"><i class="ph ph-clock"></i> Retardo</button>
-                <button class="${btnFalta}" ${dataAttrs} data-tipo="falta"  onclick="window._btnAsist(this,event)"><i class="ph ph-x-circle"></i> Falta</button>
+                <button class="${btnPres}" ${dataAttrs} data-tipo="puntual" onclick="window._btnAsist(this,event)" title="${enToleranciaTiempo ? 'Registrar como puntual' : 'Registrar como retardo (tolerancia vencida)'}">
+                    <i class="ph ph-check-circle"></i> ${estadoActual === 'puntual' ? '✓ Puntual' : estadoActual === 'retardo' ? '⏰ Retardo' : etiquetaPresente}
+                </button>
+                <button class="${btnFalta}" ${dataAttrs} data-tipo="falta" onclick="window._btnAsist(this,event)" title="${yaAsistio ? 'Cambiar a falta (revertirá la asistencia registrada)' : 'Marcar como falta'}">
+                    <i class="ph ph-x-circle"></i> Falta
+                </button>
             </div>`;
         }
 
@@ -5138,46 +5459,105 @@
             const sesion = window._sesionActiva;
             if (!sesion) { alert('No hay sesión activa.'); return; }
 
+            const estadoActual = (window._sesionYaRegistrados || {})[alumnoId];
+
+            // Siempre confirmar al marcar Falta — previene errores
+            if (nuevoTipo === 'falta') {
+                const tipoLabel = estadoActual === 'puntual' ? '✓ Puntual'
+                    : estadoActual === 'retardo' ? '⏰ Retardo'
+                    : 'Sin registro';
+                const confirmar = await confirmarAccionFalta(nombre, tipoLabel);
+                if (!confirmar) return;
+            }
+
+            const ahora  = new Date();
+            const inicio = new Date(sesion.iniciada);
+            const limiteRetardo = new Date(inicio.getTime() + sesion.toleranciaMin * 60000);
+            const minutosDesdeInicio = Math.floor((ahora - inicio) / 60000);
+
+            // Si presiona el botón "Presente/Puntual", calcular tipo según tolerancia
+            let tipoFinal = nuevoTipo;
+            if (nuevoTipo === 'puntual') {
+                tipoFinal = ahora <= limiteRetardo ? 'puntual' : 'retardo';
+            }
+
             const card = document.getElementById('alumno-card-' + alumnoId);
             if (card) card.classList.add('opacity-50', 'pointer-events-none');
 
-            const ahora = new Date();
-            const inicio = new Date(sesion.iniciada);
-            const minutosDesdeInicio = Math.floor((ahora - inicio) / 60000);
-
             try {
-                // Usar el docId guardado al cargar la lista (evita consulta extra a Firestore)
                 const docIdExist = (window._sesionDocIds || {})[alumnoId];
 
                 if (docIdExist) {
-                    // Siempre actualizar el doc existente (falta, retardo o puntual)
                     await updateDoc(doc(db, 'asistencias', docIdExist), {
-                        tipo: nuevoTipo,
-                        minutosDesdeInicio,
+                        tipo: tipoFinal, minutosDesdeInicio,
                         timestamp: ahora.toISOString()
                     });
                 } else {
-                    // Fallback: crear doc si por alguna razón no existe
                     const ref = await addDoc(getCol('asistencias'), {
                         alumnoId, alumnoNombre: nombre, matricula, carrera,
                         grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
                         materia: sesion.materia, salon: sesion.salon,
                         profId: sesion.profId, profNombre: sesion.profNombre,
-                        sesionId: sesion.id, tipo: nuevoTipo, minutosDesdeInicio,
+                        sesionId: sesion.id, tipo: tipoFinal, minutosDesdeInicio,
                         fecha: ahora.toISOString(), timestamp: ahora.toISOString()
                     });
                     if (!window._sesionDocIds) window._sesionDocIds = {};
                     window._sesionDocIds[alumnoId] = ref.id;
                 }
 
+                if (window._sesionYaRegistrados) window._sesionYaRegistrados[alumnoId] = tipoFinal;
                 if (card) card.classList.remove('opacity-50', 'pointer-events-none');
-                actualizarTarjetaAlumno(alumnoId, { nombre }, nuevoTipo);
+                actualizarTarjetaAlumno(alumnoId, { nombre }, tipoFinal);
 
             } catch(err) {
                 if (card) card.classList.remove('opacity-50', 'pointer-events-none');
                 alert('Error: ' + err.message);
             }
         };
+
+        // Mini-modal de confirmación para marcar falta
+        function confirmarAccionFalta(nombre, estadoActual) {
+            return new Promise(resolve => {
+                const prev = document.getElementById('modalConfFalta');
+                if (prev) prev.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'modalConfFalta';
+                overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+                overlay.innerHTML = `
+                    <div class="bg-white rounded-2xl shadow-2xl border w-full max-w-xs overflow-hidden" onclick="event.stopPropagation()">
+                        <div class="bg-red-50 border-b border-red-100 p-5 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0 text-lg font-bold">
+                                ${nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div class="min-w-0">
+                                <p class="font-bold text-slate-800 text-sm leading-tight truncate">${nombre}</p>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Estado actual: <span class="font-bold">${estadoActual}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="p-5">
+                            <p class="text-sm text-slate-700 text-center leading-relaxed mb-5">
+                                ¿Confirmas marcar a este alumno como <span class="font-bold text-red-600">Falta</span>?
+                            </p>
+                            <div class="flex gap-3">
+                                <button id="btnFaltaCancel"
+                                    class="flex-1 border border-slate-200 text-slate-600 font-bold py-2.5 rounded-xl hover:bg-slate-50 transition text-sm">
+                                    Cancelar
+                                </button>
+                                <button id="btnFaltaConfirm"
+                                    class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                                    Sí, Falta
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); }};
+                document.getElementById('btnFaltaCancel').onclick  = () => { overlay.remove(); resolve(false); };
+                document.getElementById('btnFaltaConfirm').onclick = () => { overlay.remove(); resolve(true);  };
+            });
+        }
 
 
 
@@ -5287,6 +5667,24 @@
                     grupoNombre:  sesionCerrada?.grupoNombre || '—',
                     durMin, totalAlumnos, presentes, retardos, faltas, pct
                 });
+
+                // ── Auto-recargar el dashboard para que la tabla muestre los datos nuevos ──
+                setTimeout(async () => {
+                    await renderProfesorDashboard();
+                    await cargarClasesSesionSelect();
+                    // Si había un reporte abierto de esa clase, reabrirlo automáticamente
+                    if (sesionCerrada?.grupoId && sesionCerrada?.materia) {
+                        setTimeout(() => {
+                            verReporteClase(
+                                sesionCerrada.grupoId,
+                                sesionCerrada.materia,
+                                sesionCerrada.grupoNombre,
+                                sesionCerrada.turno || '',
+                                sesionCerrada.salon  || ''
+                            );
+                        }, 300);
+                    }
+                }, 800);
 
             } catch(e) { alert('Error: ' + e.message); }
         };
@@ -5512,39 +5910,68 @@
                     return;
                 }
 
-                // ── Evitar duplicado: mismo alumno, misma materia, mismo día ──
-                const hoyStr = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
-                const qDup = query(
-                    getCol('asistencias'),
-                    where('alumnoId','==', alumno.id),
-                    where('grupoId','==', sesion.grupoId),
-                    where('materia','==', sesion.materia)
-                );
-                const snapDup = await getDocs(qDup);
-                let yaRegistradoHoy = false;
-                snapDup.forEach(d => {
-                    const fechaReg = (d.data().fecha || '').split('T')[0];
-                    if (fechaReg === hoyStr) yaRegistradoHoy = true;
-                });
-                if (yaRegistradoHoy) {
-                    mostrarResultadoProf('duplicado', alumno, matricula, tipo, sesion, minutosDesdeInicio);
-                    inp.disabled = false; inp.value = ''; inp.focus();
-                    profScanValidar('');
-                    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
-                    return;
+                // ── Verificar registro existente hoy ──
+                const hoyStr = ahora.toISOString().split('T')[0];
+
+                // Primero verificar en _sesionDocIds (lista ya cargada, más rápido)
+                let docIdExistente = (window._sesionDocIds || {})[alumno.id] || null;
+                let tipoExistente  = (window._sesionYaRegistrados || {})[alumno.id] || null;
+
+                // Si no está en memoria, buscar en Firestore (sesión sin lista cargada)
+                if (!docIdExistente) {
+                    const qDup = query(
+                        getCol('asistencias'),
+                        where('alumnoId','==', alumno.id),
+                        where('grupoId','==', sesion.grupoId),
+                        where('materia','==', sesion.materia)
+                    );
+                    const snapDup = await getDocs(qDup);
+                    snapDup.forEach(d => {
+                        const fechaReg = (d.data().fecha || '').split('T')[0];
+                        if (fechaReg === hoyStr) {
+                            docIdExistente = d.id;
+                            tipoExistente  = d.data().tipo || 'falta';
+                        }
+                    });
                 }
 
-                // Guardar asistencia
-                await addDoc(getCol('asistencias'), {
-                    alumnoId: alumno.id, alumnoNombre: alumno.nombre, matricula,
-                    grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
-                    materia: sesion.materia, salon: sesion.salon,
-                    profId: sesion.profId, profNombre: sesion.profNombre,
-                    sesionId: sesion.id, tipo, minutosDesdeInicio,
-                    fecha: ahora.toISOString(), timestamp: ahora.toISOString()
-                });
+                let registroActualizado = false;
 
-                mostrarResultadoProf('ok', alumno, matricula, tipo, sesion, minutosDesdeInicio);
+                if (docIdExistente) {
+                    if (tipoExistente === 'falta') {
+                        // Estaba en falta → actualizar con el resultado del escaneo (puntual/retardo)
+                        await updateDoc(doc(db, 'asistencias', docIdExistente), {
+                            tipo, minutosDesdeInicio,
+                            fecha: ahora.toISOString(),
+                            timestamp: ahora.toISOString(),
+                            sesionId: sesion.id
+                        });
+                        if (window._sesionDocIds)       window._sesionDocIds[alumno.id]      = docIdExistente;
+                        if (window._sesionYaRegistrados) window._sesionYaRegistrados[alumno.id] = tipo;
+                        registroActualizado = true;
+                    } else {
+                        // Ya tiene puntual o retardo → mostrar aviso, no sobreescribir sin confirmar
+                        mostrarResultadoProf('ya_registrado', alumno, matricula, tipoExistente, sesion, minutosDesdeInicio);
+                        inp.disabled = false; inp.value = ''; inp.focus();
+                        profScanValidar('');
+                        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+                        return;
+                    }
+                } else {
+                    // No hay registro → crear nuevo
+                    const ref = await addDoc(getCol('asistencias'), {
+                        alumnoId: alumno.id, alumnoNombre: alumno.nombre, matricula,
+                        grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
+                        materia: sesion.materia, salon: sesion.salon,
+                        profId: sesion.profId, profNombre: sesion.profNombre,
+                        sesionId: sesion.id, tipo, minutosDesdeInicio,
+                        fecha: ahora.toISOString(), timestamp: ahora.toISOString()
+                    });
+                    if (window._sesionDocIds)        window._sesionDocIds[alumno.id]       = ref.id;
+                    if (window._sesionYaRegistrados) window._sesionYaRegistrados[alumno.id] = tipo;
+                }
+
+                mostrarResultadoProf(registroActualizado ? 'actualizado' : 'ok', alumno, matricula, tipo, sesion, minutosDesdeInicio);
 
                 // Actualizar tarjeta en la lista si está visible
                 actualizarTarjetaAlumno(alumno.id, alumno, tipo);
@@ -5642,26 +6069,36 @@
                 return;
             }
 
-            if (estado === 'duplicado') {
-                ultimo.className = 'rounded-2xl border overflow-hidden border-blue-200 bg-blue-50';
+            if (estado === 'ya_registrado') {
+                // Tiene puntual o retardo previo — el profe debe decidir conscientemente
+                const tipoLabel = tipo === 'retardo' ? '⏰ Retardo' : '✓ Puntual';
+                const colorBase = tipo === 'retardo' ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50';
+                const colorText = tipo === 'retardo' ? 'text-amber-800' : 'text-green-800';
+                const colorSub  = tipo === 'retardo' ? 'text-amber-600' : 'text-green-600';
+                ultimo.className = `rounded-2xl border overflow-hidden ${colorBase}`;
                 header.innerHTML = `
                     <span class="text-2xl flex-shrink-0">📋</span>
                     <div class="flex-grow min-w-0">
-                        <p class="font-bold text-blue-800 text-sm leading-tight">${alumno.nombre}</p>
-                        <p class="text-xs text-blue-600 mt-0.5">Mat. ${matricula} — Ya tiene asistencia en <b>${sesion.materia}</b> hoy</p>
+                        <p class="font-bold text-sm leading-tight ${colorText}">${alumno.nombre}</p>
+                        <p class="text-xs mt-0.5 ${colorSub}">Mat. ${matricula} — Ya registrado como <b>${tipoLabel}</b> hoy</p>
                     </div>`;
-                info.innerHTML = `<p class="text-[11px] text-blue-500">No se registró de nuevo. Solo se permite una asistencia por materia por día.</p>`;
+                info.innerHTML = `
+                    <p class="text-[11px] text-slate-500">Si deseas cambiar su estado usa los botones de la lista de alumnos.</p>`;
                 return;
             }
 
-            // ok
+            // ok o actualizado
+            const fueActualizado = estado === 'actualizado';
             const esPuntual = tipo === 'puntual';
             ultimo.className = `rounded-2xl border overflow-hidden ${esPuntual ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`;
             header.innerHTML = `
                 <span class="text-2xl flex-shrink-0">${esPuntual ? '✅' : '⏰'}</span>
                 <div class="flex-grow min-w-0">
                     <p class="font-bold text-sm leading-tight ${esPuntual?'text-green-800':'text-amber-800'}">${alumno.nombre}</p>
-                    <p class="text-xs mt-0.5 ${esPuntual?'text-green-600':'text-amber-600'}">Mat. ${matricula} &bull; ${alumno.carrera || ''}</p>
+                    <p class="text-xs mt-0.5 ${esPuntual?'text-green-600':'text-amber-600'}">
+                        Mat. ${matricula} &bull; ${alumno.carrera || ''}
+                        ${fueActualizado ? '<span class="ml-1 font-bold">(actualizado de Falta)</span>' : ''}
+                    </p>
                 </div>
                 <span class="text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0 ${esPuntual?'bg-green-200 text-green-900':'bg-amber-200 text-amber-900'}">
                     ${esPuntual ? '✓ Puntual' : `Retardo +${minutos}min`}
