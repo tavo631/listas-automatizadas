@@ -165,6 +165,24 @@
         </div>
     </footer>
 
+    <!-- Proxy global para funciones del módulo (evita "router is not defined" antes de que cargue el módulo) -->
+    <script>
+        // Estas funciones proxy encolan llamadas hasta que el módulo las defina en window
+        function _proxy(fn, args) {
+            if (window[fn]) { window[fn].apply(null, args); return; }
+            // Si aún no está lista, esperar y reintentar
+            setTimeout(() => _proxy(fn, args), 50);
+        }
+        function router(r)            { _proxy('router', [r]); }
+        function toggleMobileMenu()   { _proxy('toggleMobileMenu', []); }
+        function toggleChat()         { _proxy('toggleChat', []); }
+        function logout()             { _proxy('logout', []); }
+        function logoutAdmin()        { _proxy('logoutAdmin', []); }
+        function logoutProfesor()     { _proxy('logoutProfesor', []); }
+        function adminTab(t)          { _proxy('adminTab', [t]); }
+        function cambiarEstadoAlumno(...a) { _proxy('cambiarEstadoAlumno', a); }
+    </script>
+
     <!-- ==========================================
          JOSÉ GUSTAVO - LÓGICA BACKEND & FIREBASE
     ========================================== -->
@@ -889,7 +907,24 @@
                                         <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Registros de esta sesión</h4>
                                         <span id="profScanHistorialCount" class="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full"></span>
                                     </div>
-                                    <div id="profScanHistorialLista" class="space-y-1.5 max-h-64 overflow-y-auto pr-1"></div>
+                                    <div id="profScanHistorialLista" class="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scroll"></div>
+                                </div>
+
+                                <!-- ── LISTA DE ALUMNOS ── -->
+                                <div id="profListaAlumnos" class="hidden">
+                                    <div class="flex items-center justify-between mb-3 pt-2 border-t border-slate-100">
+                                        <h4 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                            <i class="ph ph-list-checks text-green-600"></i> Lista del grupo
+                                        </h4>
+                                        <span id="profListaContador" class="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"></span>
+                                    </div>
+                                    <div class="relative mb-3">
+                                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                                        <input type="text" id="profListaBusqueda" placeholder="Buscar alumno por nombre..."
+                                            class="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-green-400 outline-none text-sm transition"
+                                            oninput="filtrarListaAlumnos(this.value)">
+                                    </div>
+                                    <div id="profListaLista" class="space-y-2 max-h-[420px] overflow-y-auto pr-1 custom-scroll"></div>
                                 </div>
 
                             </div>
@@ -1604,17 +1639,30 @@
                     sesionesXmateria[ses.materia].push({ id: d.id, fecha: ses.iniciada, profNombre: ses.profNombre || '—' });
                 });
 
-                // Asistencias del alumno por materia — con fechas detalladas
+                // Asistencias del alumno por materia — deduplicadas por sesionId
+                // Si no hay sesionId, se deduplica por fecha del día (YYYY-MM-DD)
                 const asistXmateria = {};
                 asistSnap.forEach(d => {
                     const a = d.data();
                     if (!a.materia) return;
-                    if (!asistXmateria[a.materia]) asistXmateria[a.materia] = { asistencias: 0, retardos: 0, fechasAsist: new Set(), registros: [] };
+                    if (!asistXmateria[a.materia]) asistXmateria[a.materia] = {
+                        asistencias: 0, retardos: 0,
+                        fechasAsist: new Set(),  // fechas YYYY-MM-DD donde asistió
+                        sesionesVistas: new Set(), // sesionIds ya contadas
+                        registros: []            // un registro por sesión
+                    };
+
+                    const mat = asistXmateria[a.materia];
+                    // Usar sesionId como clave de deduplicación, o fecha del día si no existe
+                    const claveUnica = a.sesionId || (a.fecha || '').split('T')[0];
+                    if (!claveUnica || mat.sesionesVistas.has(claveUnica)) return; // ya contada
+                    mat.sesionesVistas.add(claveUnica);
+
                     const fechaDia = (a.fecha || '').split('T')[0];
-                    asistXmateria[a.materia].asistencias++;
-                    asistXmateria[a.materia].fechasAsist.add(fechaDia);
-                    if (a.tipo === 'retardo') asistXmateria[a.materia].retardos++;
-                    asistXmateria[a.materia].registros.push({ fecha: a.fecha, tipo: a.tipo || 'puntual' });
+                    mat.asistencias++;
+                    mat.fechasAsist.add(fechaDia);
+                    if (a.tipo === 'retardo') mat.retardos++;
+                    mat.registros.push({ fecha: a.fecha, tipo: a.tipo || 'puntual', sesionId: a.sesionId });
                 });
 
                 // Materias únicas del horario del grupo
@@ -1637,17 +1685,28 @@
                         const estado   = sesiones === 0 ? 'Sin sesiones' : pct >= 70 ? 'Regular' : 'En riesgo';
                         totalAsist += asist; totalSesiones += sesiones;
 
-                        // Construir detalle por día
-                        const diasAsistidos = datos.fechasAsist || new Set();
+                        // Construir detalle por sesión (una entrada por sesión realizada)
+                        // Mapear sesionId → tipo de registro del alumno
+                        const registroXsesion = {};
+                        (datos.registros || []).forEach(r => {
+                            const clave = r.sesionId || (r.fecha||'').split('T')[0];
+                            if (clave && !registroXsesion[clave]) {
+                                registroXsesion[clave] = r.tipo || 'puntual';
+                            }
+                        });
+
                         const detalleHTML = sesList
                             .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
                             .map(ses => {
+                                const claveUnica = ses.id || (ses.fecha||'').split('T')[0];
+                                const tipo = registroXsesion[claveUnica];
+                                const asistio = !!tipo;
+                                const esRetardo = tipo === 'retardo';
                                 const diaStr = (ses.fecha || '').split('T')[0];
-                                const asistioEseDia = diasAsistidos.has(diaStr);
-                                const reg = (datos.registros || []).find(r => (r.fecha||'').split('T')[0] === diaStr);
-                                const esRetardo = reg?.tipo === 'retardo';
-                                const fechaLabel = diaStr ? new Date(diaStr + 'T12:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'}) : '—';
-                                if (asistioEseDia) {
+                                const fechaLabel = diaStr
+                                    ? new Date(diaStr + 'T12:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'})
+                                    : '—';
+                                if (asistio) {
                                     return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg ${esRetardo?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}" title="${esRetardo?'Retardo':'Puntual'}">
                                         ${esRetardo?'⏰':'✓'} ${fechaLabel}
                                     </span>`;
@@ -4269,10 +4328,11 @@
 
             try {
                 // Cargar todos los grupos y filtrar los que el profesor imparte
-                const [gruposSnap, studentsSnap, asistSnap] = await Promise.all([
+                const [gruposSnap, studentsSnap, asistSnap, sesionesSnap] = await Promise.all([
                     getDocs(getCol('horarios_grupos')),
                     getDocs(getCol('students')),
-                    getDocs(getCol('asistencias'))
+                    getDocs(getCol('asistencias')),
+                    getDocs(getCol('sesiones_scan'))
                 ]);
 
                 // Mapa de alumnos por grupoId
@@ -4285,26 +4345,34 @@
                     }
                 });
 
-                // Mapa de asistencias: grupoId_materia_alumnoId → Set de fechas
+                // clasesRealizadasMap: claveClase -> Set de fechas (YYYY-MM-DD) de sesiones realizadas
+                // Usamos fecha del dia en ambos mapas para garantizar que coincidan siempre,
+                // sin importar si sesionId cambio o no existe en asistencias antiguas.
+                const clasesRealizadasMap = {};
+                sesionesSnap.forEach(d => {
+                    const s = d.data();
+                    if (!s.grupoId || !s.materia || !s.iniciada) return;
+                    const claveClase = s.grupoId + '||' + s.materia;
+                    if (!clasesRealizadasMap[claveClase]) clasesRealizadasMap[claveClase] = new Set();
+                    // Guardar la fecha del dia de la sesion
+                    clasesRealizadasMap[claveClase].add(s.iniciada.split('T')[0]);
+                });
+
+                // asistMap: claveAlumno -> Set de fechas (YYYY-MM-DD) de asistencias
+                // Mismo criterio de fecha que clasesRealizadasMap para que el match sea correcto.
                 const asistMap = {};
-                const retardoMap = {}; // igual pero solo retardos
-                const clasesRealizadasMap = {}; // grupoId_materia → Set de fechas únicas
+                const retardoMap = {};
                 asistSnap.forEach(d => {
                     const a = d.data();
                     if (!a.grupoId || !a.materia || !a.alumnoId || !a.fecha) return;
-                    const claveClase = a.grupoId + '||' + a.materia;
+                    const claveClase  = a.grupoId + '||' + a.materia;
                     const claveAlumno = claveClase + '||' + a.alumnoId;
-                    const fecha = a.fecha.split('T')[0];
-
-                    if (!clasesRealizadasMap[claveClase]) clasesRealizadasMap[claveClase] = new Set();
-                    clasesRealizadasMap[claveClase].add(fecha);
-
+                    const fechaDia    = a.fecha.split('T')[0];
                     if (!asistMap[claveAlumno]) asistMap[claveAlumno] = new Set();
-                    asistMap[claveAlumno].add(fecha);
-
+                    asistMap[claveAlumno].add(fechaDia);   // deduplicado por dia automaticamente
                     if (a.tipo === 'retardo') {
                         if (!retardoMap[claveAlumno]) retardoMap[claveAlumno] = new Set();
-                        retardoMap[claveAlumno].add(fecha);
+                        retardoMap[claveAlumno].add(fechaDia);
                     }
                 });
 
@@ -4807,6 +4875,14 @@
             // Guardar sesión activa para el escáner del profe
             window._sesionActiva = sesion;
 
+            // Resetear contadores visuales a 0
+            const ep = document.getElementById('sesionCountPuntuales');
+            const er = document.getElementById('sesionCountRetardos');
+            const et = document.getElementById('sesionCountTotal');
+            if (ep) ep.textContent = '0';
+            if (er) er.textContent = '0';
+            if (et) et.textContent = '0';
+
             // Contador de tiempo transcurrido
             if (sesionTimer) clearInterval(sesionTimer);
             sesionTimer = setInterval(async () => {
@@ -4833,6 +4909,9 @@
                 }
             }, 1000);
 
+            // Cargar lista de alumnos del grupo
+            cargarListaAlumnosSesion(sesion);
+
             // Enfocar el input automáticamente
             setTimeout(() => {
                 const inp = document.getElementById('profScanInput');
@@ -4840,19 +4919,452 @@
             }, 150);
         }
 
+
+        // ── LISTA DE ALUMNOS — FUNCIONES ──────────────────────────
+
+        async function cargarListaAlumnosSesion(sesion) {
+            const listaDiv = document.getElementById('profListaAlumnos');
+            const listaEl  = document.getElementById('profListaLista');
+            const contEl   = document.getElementById('profListaContador');
+            if (!listaDiv || !listaEl) return;
+
+            listaEl.innerHTML = '<div class="flex justify-center py-6"><div class="animate-spin rounded-full h-7 w-7 border-b-2 border-green-600"></div></div>';
+            listaDiv.classList.remove('hidden');
+
+            try {
+                const hoyStr = new Date().toISOString().split('T')[0];
+
+                // 1. Obtener alumnos del grupo
+                const qAlumnos = query(getCol('students'), where('grupoId', '==', sesion.grupoId));
+                const snapAlumnos = await getDocs(qAlumnos);
+                const alumnos = [];
+                snapAlumnos.forEach(d => alumnos.push({ id: d.id, ...d.data() }));
+                alumnos.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+                if (alumnos.length === 0) {
+                    listaEl.innerHTML = '<p class="text-center py-8 text-slate-400 text-sm">No hay alumnos en este grupo.</p>';
+                    return;
+                }
+
+                // 2. Leer registros de hoy para esta materia+grupo
+                const qAsist = query(getCol('asistencias'),
+                    where('grupoId', '==', sesion.grupoId),
+                    where('materia', '==', sesion.materia));
+                const snapAsist = await getDocs(qAsist);
+
+                // docIdPorAlumno: alumnoId -> docId del registro de hoy (para actualizar, no duplicar)
+                const docIdPorAlumno = {};
+                const tipoPorAlumno  = {};
+                snapAsist.forEach(d => {
+                    const a = d.data();
+                    if ((a.fecha || '').split('T')[0] === hoyStr) {
+                        docIdPorAlumno[a.alumnoId] = d.id;
+                        tipoPorAlumno[a.alumnoId]  = a.tipo || 'falta';
+                    }
+                });
+
+                // 3. Para cada alumno sin registro hoy → crear doc de falta en Firestore
+                const ahora = new Date();
+                const batch = [];
+                for (const alumno of alumnos) {
+                    if (!docIdPorAlumno[alumno.id]) {
+                        batch.push(
+                            addDoc(getCol('asistencias'), {
+                                alumnoId:     alumno.id,
+                                alumnoNombre: alumno.nombre   || '',
+                                matricula:    alumno.matricula|| '',
+                                carrera:      alumno.carrera  || '',
+                                grupoId:      sesion.grupoId,
+                                grupoNombre:  sesion.grupoNombre,
+                                materia:      sesion.materia,
+                                salon:        sesion.salon    || '',
+                                profId:       sesion.profId,
+                                profNombre:   sesion.profNombre,
+                                sesionId:     sesion.id,
+                                tipo:         'falta',
+                                minutosDesdeInicio: 0,
+                                fecha:        ahora.toISOString(),
+                                timestamp:    ahora.toISOString()
+                            }).then(ref => {
+                                docIdPorAlumno[alumno.id] = ref.id;
+                                tipoPorAlumno[alumno.id]  = 'falta';
+                            })
+                        );
+                    }
+                }
+                if (batch.length > 0) await Promise.all(batch);
+
+                // 4. Filtrar solo alumnos del grupo actual (evita 5/4 registrados)
+                const alumnoIds = new Set(alumnos.map(a => a.id));
+                const yaRegistradosFiltrado = {};
+                Object.entries(tipoPorAlumno).forEach(([id, tipo]) => {
+                    if (alumnoIds.has(id)) yaRegistradosFiltrado[id] = tipo;
+                });
+
+                // Guardar en window para uso posterior
+                window._sesionAlumnos        = alumnos;
+                window._sesionYaRegistrados  = yaRegistradosFiltrado;
+                window._sesionDocIds         = docIdPorAlumno;  // nuevo: docId por alumno para updates rápidos
+                window._sesionRef            = sesion;
+
+                actualizarContadoresLocal();
+
+                const total = alumnos.length;
+                const presentes = Object.values(yaRegistradosFiltrado).filter(t => t !== 'falta').length;
+                if (contEl) contEl.textContent = presentes > 0
+                    ? `${presentes}/${total} presentes`
+                    : `${total} alumno${total !== 1 ? 's' : ''} — todos en falta`;
+
+                listaEl.innerHTML = alumnos.map(a =>
+                    tarjetaAlumnoLista(a, yaRegistradosFiltrado[a.id] || 'falta')
+                ).join('');
+
+            } catch(e) {
+                listaEl.innerHTML = `<p class="text-center py-6 text-red-400 text-sm">Error: ${e.message}</p>`;
+            }
+        }
+
+
+        function botonesAccionAlumno(alumnoId, matricula, nombre, carrera, grupoId, grupoNombre, estadoActual) {
+            // Usamos data-attributes en lugar de inyectar argumentos en onclick
+            // para evitar SyntaxError con nombres que tienen apostrofes, acentos, etc.
+            const btnBase  = 'text-[10px] font-bold px-2 py-1.5 rounded-lg border transition-all flex items-center gap-1';
+            const btnPres  = estadoActual === 'puntual'
+                ? `${btnBase} bg-green-600 text-white border-green-600 ring-2 ring-green-200`
+                : `${btnBase} bg-white text-green-700 border-green-300 hover:bg-green-50`;
+            const btnRet   = estadoActual === 'retardo'
+                ? `${btnBase} bg-amber-500 text-white border-amber-500 ring-2 ring-amber-200`
+                : `${btnBase} bg-white text-amber-600 border-amber-300 hover:bg-amber-50`;
+            const btnFalta = estadoActual === 'falta'
+                ? `${btnBase} bg-red-500 text-white border-red-500 ring-2 ring-red-200`
+                : `${btnBase} bg-white text-red-500 border-red-300 hover:bg-red-50`;
+            // Escapar para atributos HTML (solo &, ", < y >)
+            const attr = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const dataAttrs = `data-aid="${attr(alumnoId)}" data-mat="${attr(matricula)}" data-nom="${attr(nombre)}" data-car="${attr(carrera)}" data-gid="${attr(grupoId)}" data-gnm="${attr(grupoNombre)}"`;
+            return `<div class="flex items-center gap-1 flex-shrink-0" id="alumno-badge-${alumnoId}">
+                <button class="${btnPres}" ${dataAttrs} data-tipo="puntual" onclick="window._btnAsist(this,event)"><i class="ph ph-check-circle"></i> Presente</button>
+                <button class="${btnRet}"  ${dataAttrs} data-tipo="retardo" onclick="window._btnAsist(this,event)"><i class="ph ph-clock"></i> Retardo</button>
+                <button class="${btnFalta}" ${dataAttrs} data-tipo="falta"  onclick="window._btnAsist(this,event)"><i class="ph ph-x-circle"></i> Falta</button>
+            </div>`;
+        }
+
+
+        function tarjetaAlumnoLista(alumno, estado) {
+            const inicial = (alumno.nombre || '?').charAt(0).toUpperCase();
+            const bgClass = estado === 'puntual' ? 'bg-green-50 border-green-200'
+                : estado === 'retardo' ? 'bg-amber-50 border-amber-200'
+                : estado === 'falta'   ? 'bg-red-50 border-red-200'
+                : 'bg-white border-slate-200';
+            const iconColor = estado === 'puntual' ? 'bg-green-100 text-green-600'
+                : estado === 'retardo' ? 'bg-amber-100 text-amber-600'
+                : estado === 'falta'   ? 'bg-red-100 text-red-500'
+                : 'bg-slate-100 text-slate-500';
+            const botonesHTML = botonesAccionAlumno(
+                alumno.id, alumno.matricula||'', alumno.nombre||'',
+                alumno.carrera||'', alumno.grupoId||'', alumno.grupoNombre||'', estado||null
+            );
+            return `
+            <div id="alumno-card-${alumno.id}"
+                class="alumno-lista-card flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${bgClass}"
+                data-nombre="${(alumno.nombre||'').toLowerCase()}">
+                <div class="w-9 h-9 rounded-full ${iconColor} flex items-center justify-center flex-shrink-0 text-base font-bold" id="alumno-icon-${alumno.id}">${inicial}</div>
+                <div class="flex-grow min-w-0">
+                    <p class="font-semibold text-slate-800 text-sm leading-tight truncate">${alumno.nombre || '—'}</p>
+                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">${alumno.matricula || '—'} · ${alumno.carrera || ''}</p>
+                </div>
+                ${botonesHTML}
+            </div>`;
+        }
+
+
+        window.filtrarListaAlumnos = (val) => {
+            const v = val.toLowerCase().trim();
+            document.querySelectorAll('.alumno-lista-card').forEach(card => {
+                card.style.display = (!v || (card.dataset.nombre || '').includes(v)) ? '' : 'none';
+            });
+        };
+
+        function actualizarTarjetaAlumno(alumnoId, alumno, tipo) {
+            const card   = document.getElementById('alumno-card-' + alumnoId);
+            const iconEl = document.getElementById('alumno-icon-' + alumnoId);
+            if (!card) return;
+
+            const bgClass = tipo === 'puntual' ? 'bg-green-50 border-green-200'
+                : tipo === 'retardo' ? 'bg-amber-50 border-amber-200'
+                : tipo === 'falta'   ? 'bg-red-50 border-red-200'
+                : 'bg-white border-slate-200';
+            card.className = `alumno-lista-card flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${bgClass}`;
+
+            if (iconEl) {
+                const iconColor = tipo === 'puntual' ? 'bg-green-100 text-green-600'
+                    : tipo === 'retardo' ? 'bg-amber-100 text-amber-600'
+                    : tipo === 'falta'   ? 'bg-red-100 text-red-500'
+                    : 'bg-slate-100 text-slate-500';
+                iconEl.className = `w-9 h-9 rounded-full ${iconColor} flex items-center justify-center flex-shrink-0 text-base font-bold`;
+            }
+
+            // Redibujar botones con nuevo estado seleccionado
+            const badgeEl = document.getElementById('alumno-badge-' + alumnoId);
+            if (badgeEl) {
+                const alumnos = window._sesionAlumnos || [];
+                const a = alumnos.find(x => x.id === alumnoId) || { id: alumnoId, nombre: alumno.nombre||'', matricula:'', carrera:'', grupoId:'', grupoNombre:'' };
+                badgeEl.outerHTML = botonesAccionAlumno(alumnoId, a.matricula, a.nombre, a.carrera, a.grupoId, a.grupoNombre, tipo);
+            }
+
+            // Actualizar estado en memoria y contadores
+            if (window._sesionYaRegistrados !== undefined) {
+                // Siempre guardamos el estado (incluye falta) para saber el estado actual
+                window._sesionYaRegistrados[alumnoId] = tipo;
+                const total    = (window._sesionAlumnos || []).length;
+                const presentes = Object.values(window._sesionYaRegistrados).filter(t => t !== 'falta').length;
+                const contEl   = document.getElementById('profListaContador');
+                if (contEl) contEl.textContent = presentes > 0
+                    ? `${presentes}/${total} presentes`
+                    : `${total} alumno${total !== 1 ? 's' : ''} — todos en falta`;
+                actualizarContadoresLocal();
+            }
+        }
+
+        // Cambia el estado de un alumno: puntual, retardo o falta (elimina el registro)
+        // Handler seguro para botones de asistencia — lee datos desde data-attributes
+        window._btnAsist = (btn, event) => {
+            if (event) event.stopPropagation();
+            const d = btn.dataset;
+            window.cambiarEstadoAlumno(d.aid, d.mat, d.nom, d.car, d.gid, d.gnm, d.tipo, event);
+        };
+
+        window.cambiarEstadoAlumno = async (alumnoId, matricula, nombre, carrera, grupoId, grupoNombre, nuevoTipo, event) => {
+            if (event) event.stopPropagation();
+            const sesion = window._sesionActiva;
+            if (!sesion) { alert('No hay sesión activa.'); return; }
+
+            const card = document.getElementById('alumno-card-' + alumnoId);
+            if (card) card.classList.add('opacity-50', 'pointer-events-none');
+
+            const ahora = new Date();
+            const inicio = new Date(sesion.iniciada);
+            const minutosDesdeInicio = Math.floor((ahora - inicio) / 60000);
+
+            try {
+                // Usar el docId guardado al cargar la lista (evita consulta extra a Firestore)
+                const docIdExist = (window._sesionDocIds || {})[alumnoId];
+
+                if (docIdExist) {
+                    // Siempre actualizar el doc existente (falta, retardo o puntual)
+                    await updateDoc(doc(db, 'asistencias', docIdExist), {
+                        tipo: nuevoTipo,
+                        minutosDesdeInicio,
+                        timestamp: ahora.toISOString()
+                    });
+                } else {
+                    // Fallback: crear doc si por alguna razón no existe
+                    const ref = await addDoc(getCol('asistencias'), {
+                        alumnoId, alumnoNombre: nombre, matricula, carrera,
+                        grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
+                        materia: sesion.materia, salon: sesion.salon,
+                        profId: sesion.profId, profNombre: sesion.profNombre,
+                        sesionId: sesion.id, tipo: nuevoTipo, minutosDesdeInicio,
+                        fecha: ahora.toISOString(), timestamp: ahora.toISOString()
+                    });
+                    if (!window._sesionDocIds) window._sesionDocIds = {};
+                    window._sesionDocIds[alumnoId] = ref.id;
+                }
+
+                if (card) card.classList.remove('opacity-50', 'pointer-events-none');
+                actualizarTarjetaAlumno(alumnoId, { nombre }, nuevoTipo);
+
+            } catch(err) {
+                if (card) card.classList.remove('opacity-50', 'pointer-events-none');
+                alert('Error: ' + err.message);
+            }
+        };
+
+
+
+        window.registrarAsistenciaAlumno = async (alumnoId, matricula, nombre, carrera, grupoId, grupoNombre) => {
+            const sesion = window._sesionActiva;
+            if (!sesion) { alert('No hay sesión activa.'); return; }
+
+            const card = document.getElementById('alumno-card-' + alumnoId);
+            if (card) { card.removeAttribute('onclick'); card.classList.add('opacity-50', 'pointer-events-none'); }
+
+            const inicio = new Date(sesion.iniciada);
+            const ahora  = new Date();
+            const tipo   = ahora <= new Date(inicio.getTime() + sesion.toleranciaMin * 60000) ? 'puntual' : 'retardo';
+            const minutosDesdeInicio = Math.floor((ahora - inicio) / 60000);
+
+            try {
+                // Verificar duplicado
+                const hoyStr = ahora.toISOString().split('T')[0];
+                const qDup = query(getCol('asistencias'),
+                    where('alumnoId','==', alumnoId),
+                    where('grupoId','==', sesion.grupoId),
+                    where('materia','==', sesion.materia));
+                const snapDup = await getDocs(qDup);
+                let yaHoy = false;
+                snapDup.forEach(d => { if ((d.data().fecha||'').split('T')[0] === hoyStr) yaHoy = true; });
+
+                if (!yaHoy) {
+                    await addDoc(getCol('asistencias'), {
+                        alumnoId, alumnoNombre: nombre, matricula, carrera,
+                        grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
+                        materia: sesion.materia, salon: sesion.salon,
+                        profId: sesion.profId, profNombre: sesion.profNombre,
+                        sesionId: sesion.id, tipo, minutosDesdeInicio,
+                        fecha: ahora.toISOString(), timestamp: ahora.toISOString()
+                    });
+                }
+
+                if (card) card.classList.remove('opacity-50', 'pointer-events-none');
+                actualizarTarjetaAlumno(alumnoId, { nombre }, tipo);
+
+                // Agregar al historial
+                const histDiv = document.getElementById('profScanHistorial');
+                const lista   = document.getElementById('profScanHistorialLista');
+                const countEl = document.getElementById('profScanHistorialCount');
+                if (histDiv && lista) {
+                    histDiv.classList.remove('hidden');
+                    const esPuntual  = tipo === 'puntual';
+                    const badgeColor = esPuntual ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+                    lista.insertAdjacentHTML('afterbegin', `
+                        <div class="flex items-center justify-between bg-white border rounded-xl px-3 py-2 text-sm shadow-sm">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div class="w-7 h-7 rounded-full ${badgeColor} flex items-center justify-center text-xs font-bold flex-shrink-0">${nombre.charAt(0)}</div>
+                                <div class="min-w-0">
+                                    <p class="font-medium text-slate-700 truncate leading-tight text-xs">${nombre}</p>
+                                    <p class="text-[10px] text-slate-400">${carrera||''} · ${matricula}</p>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor} ml-2 flex-shrink-0">${esPuntual ? '✓ Puntual' : `⏰ +${minutosDesdeInicio}min`}</span>
+                        </div>`);
+                    if (countEl) countEl.textContent = lista.children.length;
+                }
+                actualizarContadoresSesion(sesion);
+
+            } catch(err) {
+                if (card) card.classList.remove('opacity-50', 'pointer-events-none');
+                alert('Error al registrar: ' + err.message);
+            }
+        };
+
+        // En profRegistrarScan, actualizar tarjeta si está en lista
         window.terminarSesionScan = async () => {
             try {
                 if (sesionTimer) { clearInterval(sesionTimer); sesionTimer = null; }
+
+                // ── Calcular resumen antes de cerrar ──
+                const sesionCerrada = window._sesionActiva;
+                const alumnos = window._sesionAlumnos || [];
+                const yaRegistrados = window._sesionYaRegistrados || {};
+                const totalAlumnos  = alumnos.length;
+                const presentes     = Object.values(yaRegistrados).filter(t => t === 'puntual').length;
+                const retardos      = Object.values(yaRegistrados).filter(t => t === 'retardo').length;
+                const totalAsist    = presentes + retardos;
+                const faltas        = Math.max(0, totalAlumnos - totalAsist);
+                const pct           = totalAlumnos > 0 ? Math.round((totalAsist / totalAlumnos) * 100) : 0;
+                const durMin        = sesionCerrada
+                    ? Math.floor((new Date() - new Date(sesionCerrada.iniciada)) / 60000)
+                    : 0;
+
+                // Cerrar sesión en Firestore
                 window._sesionActiva = null;
                 const q = query(getCol('sesiones_scan'), where('profId','==', currentProfesor.id), where('activa','==', true));
                 const snap = await getDocs(q);
                 for (const d of snap.docs) await updateDoc(doc(db, 'sesiones_scan', d.id), { activa: false });
 
+                // Resetear UI
                 document.getElementById('sesionFormPanel').classList.remove('hidden');
                 document.getElementById('sesionActivaPanel').classList.add('hidden');
                 document.getElementById('sesionEstadoBadge').textContent = 'Sin sesión activa';
+                const listaDiv = document.getElementById('profListaAlumnos');
+                if (listaDiv) listaDiv.classList.add('hidden');
+                window._sesionAlumnos = null;
+                window._sesionYaRegistrados = null;
+
+                // ── Mostrar modal resumen ──
+                mostrarModalResumenSesion({
+                    materia:      sesionCerrada?.materia || '—',
+                    grupoNombre:  sesionCerrada?.grupoNombre || '—',
+                    durMin, totalAlumnos, presentes, retardos, faltas, pct
+                });
+
             } catch(e) { alert('Error: ' + e.message); }
         };
+
+        function mostrarModalResumenSesion({ materia, grupoNombre, durMin, totalAlumnos, presentes, retardos, faltas, pct }) {
+            const totalAsist = presentes + retardos;
+            // Quitar modal previo si existe
+            const prev = document.getElementById('modalResumenSesion');
+            if (prev) prev.remove();
+
+            const colorPct = pct >= 80 ? 'text-green-600' : pct >= 60 ? 'text-amber-500' : 'text-red-500';
+            const barColor  = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-500';
+            const emoji     = pct >= 80 ? '🎉' : pct >= 60 ? '📋' : '⚠️';
+            const durStr    = durMin < 60
+                ? `${durMin} min`
+                : `${Math.floor(durMin/60)}h ${durMin%60}min`;
+
+            const overlay = document.createElement('div');
+            overlay.id = 'modalResumenSesion';
+            overlay.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white text-center">
+                        <div class="text-4xl mb-2">${emoji}</div>
+                        <h3 class="text-lg font-bold leading-tight">Pase de lista finalizado</h3>
+                        <p class="text-slate-400 text-xs mt-1">${materia} · Grupo ${grupoNombre}</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Duración: ${durStr}</p>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="p-6 space-y-4">
+                        <!-- Porcentaje grande -->
+                        <div class="text-center">
+                            <p class="text-5xl font-bold ${colorPct}">${pct}%</p>
+                            <p class="text-slate-500 text-xs mt-1">de asistencia en esta sesión</p>
+                            <div class="w-full bg-slate-100 rounded-full h-2.5 mt-3">
+                                <div class="${barColor} h-2.5 rounded-full transition-all duration-700" style="width:${pct}%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Cuadrícula de números -->
+                        <div class="grid grid-cols-3 gap-3 text-center">
+                            <div class="bg-green-50 border border-green-100 rounded-xl p-3">
+                                <p class="text-2xl font-bold text-green-700">${presentes}</p>
+                                <p class="text-[10px] text-green-600 font-bold uppercase tracking-wide mt-0.5">Puntuales</p>
+                            </div>
+                            <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                                <p class="text-2xl font-bold text-amber-600">${retardos}</p>
+                                <p class="text-[10px] text-amber-600 font-bold uppercase tracking-wide mt-0.5">Retardos</p>
+                            </div>
+                            <div class="bg-red-50 border border-red-100 rounded-xl p-3">
+                                <p class="text-2xl font-bold text-red-500">${faltas}</p>
+                                <p class="text-[10px] text-red-500 font-bold uppercase tracking-wide mt-0.5">Faltas</p>
+                            </div>
+                        </div>
+
+                        <!-- Resumen textual -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                <span class="font-bold text-slate-800">${totalAsist} de ${totalAlumnos} alumnos</span>
+                                ${totalAsist === totalAlumnos
+                                    ? ' — <span class="text-green-600 font-bold">¡Asistencia completa! 🎉</span>'
+                                    : ` registrados · <span class="font-bold text-red-500">${faltas} falta${faltas !== 1 ? 's' : ''}</span>`
+                                }
+                            </p>
+                        </div>
+
+                        <button onclick="document.getElementById('modalResumenSesion').remove()"
+                            class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition text-sm">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            // Cerrar al hacer clic fuera
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        }
 
         // Cargar clases del profesor en el select de sesión
         async function cargarClasesSesionSelect() {
@@ -4892,13 +5404,24 @@
         }
 
         async function actualizarContadoresSesion(sesion) {
+            // Usar datos locales primero (instantáneo), luego sincronizar con Firestore si hay sesionId
+            actualizarContadoresLocal();
+            // Sincronización con Firestore en background solo si hay sesión con ID
+            if (!sesion || !sesion.id) return;
             try {
-                const q = query(getCol('asistencias'), where('sesionId','==', sesion.id || ''));
+                const q = query(getCol('asistencias'), where('sesionId','==', sesion.id));
                 const snap = await getDocs(q);
                 let puntuales = 0, retardos = 0;
                 snap.forEach(d => {
                     if (d.data().tipo === 'retardo') retardos++;
                     else puntuales++;
+                });
+                // Actualizar también _sesionYaRegistrados con datos frescos de Firestore
+                snap.forEach(d => {
+                    const a = d.data();
+                    if (a.alumnoId && window._sesionYaRegistrados) {
+                        window._sesionYaRegistrados[a.alumnoId] = a.tipo || 'puntual';
+                    }
                 });
                 const ep = document.getElementById('sesionCountPuntuales');
                 const er = document.getElementById('sesionCountRetardos');
@@ -4907,6 +5430,21 @@
                 if (er) er.textContent = retardos;
                 if (et) et.textContent = puntuales + retardos;
             } catch(e) {}
+        }
+
+        function actualizarContadoresLocal() {
+            const reg = window._sesionYaRegistrados || {};
+            let puntuales = 0, retardos = 0;
+            Object.values(reg).forEach(tipo => {
+                if (tipo === 'retardo') retardos++;
+                else if (tipo === 'puntual') puntuales++;
+            });
+            const ep = document.getElementById('sesionCountPuntuales');
+            const er = document.getElementById('sesionCountRetardos');
+            const et = document.getElementById('sesionCountTotal');
+            if (ep) ep.textContent = puntuales;
+            if (er) er.textContent = retardos;
+            if (et) et.textContent = puntuales + retardos;
         }
 
         // ==========================================
@@ -5007,6 +5545,9 @@
                 });
 
                 mostrarResultadoProf('ok', alumno, matricula, tipo, sesion, minutosDesdeInicio);
+
+                // Actualizar tarjeta en la lista si está visible
+                actualizarTarjetaAlumno(alumno.id, alumno, tipo);
 
                 // Actualizar historial en pantalla
                 const histDiv = document.getElementById('profScanHistorial');
