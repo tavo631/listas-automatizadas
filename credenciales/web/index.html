@@ -17,6 +17,8 @@
     <script>emailjs.init("Jm1Iceor87IektLtI");</script>
     <!-- NUEVA LIBRERÍA PARA LEER EXCEL -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <!-- LIBRERÍA QR CODE -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -610,23 +612,58 @@
                         <!-- Inyectado por JS -->
                     </div>
 
-                    <!-- Horario semanal (ancho completo) -->
-                    <div class="bg-white rounded-2xl shadow-sm border mb-6">
-                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                <i class="ph ph-calendar-blank text-green-600"></i> Mi Horario Semanal
-                            </h3>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <span id="dashGrupoBadge" class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hidden"></span>
-                                <button onclick="descargarHorarioPDF()" id="btnDescargaHorario"
-                                    class="hidden text-xs font-bold bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 px-3 py-1.5 rounded-full transition flex items-center gap-1">
-                                    <i class="ph ph-file-pdf"></i> Descargar PDF
-                                </button>
+                    <!-- Grid: horario + QR credencial -->
+                    <div class="grid lg:grid-cols-3 gap-6 mb-6 items-start">
+
+                        <!-- Horario semanal -->
+                        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border">
+                            <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
+                                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <i class="ph ph-calendar-blank text-green-600"></i> Mi Horario Semanal
+                                </h3>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span id="dashGrupoBadge" class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hidden"></span>
+                                    <button onclick="descargarHorarioPDF()" id="btnDescargaHorario"
+                                        class="hidden text-xs font-bold bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                                        <i class="ph ph-file-pdf"></i> Descargar PDF
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="dashHorarioContent" class="p-5">
+                                <div class="flex justify-center py-10">
+                                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                                </div>
                             </div>
                         </div>
-                        <div id="dashHorarioContent" class="p-5">
-                            <div class="flex justify-center py-10">
-                                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+
+                        <!-- Tarjeta QR credencial -->
+                        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-4 text-white text-center">
+                                <i class="ph ph-identification-card text-2xl text-green-400 mb-1 block"></i>
+                                <h3 class="font-bold text-sm leading-tight">Mi Credencial QR</h3>
+                                <p class="text-slate-400 text-[10px] mt-0.5">Muéstrala al profesor para registrar asistencia</p>
+                            </div>
+                            <div class="p-5 flex flex-col items-center gap-4">
+                                <!-- QR generado por JS -->
+                                <div id="dashQRContainer" class="bg-white p-3 rounded-xl border-2 border-slate-100 shadow-inner">
+                                    <div class="w-40 h-40 flex items-center justify-center">
+                                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-400"></div>
+                                    </div>
+                                </div>
+                                <!-- Info del alumno bajo el QR -->
+                                <div class="text-center w-full">
+                                    <p id="dashQRNombre" class="font-bold text-slate-800 text-sm leading-tight"></p>
+                                    <p id="dashQRMatricula" class="font-mono text-green-700 font-bold text-lg tracking-widest mt-1"></p>
+                                    <p id="dashQRCarrera" class="text-[10px] text-slate-400 mt-0.5"></p>
+                                </div>
+                                <!-- Botón descargar QR -->
+                                <button onclick="descargarQR()" 
+                                    class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2">
+                                    <i class="ph ph-download-simple"></i> Descargar QR
+                                </button>
+                                <p class="text-[10px] text-slate-400 text-center leading-relaxed -mt-1">
+                                    <i class="ph ph-info"></i> Este código contiene tu matrícula. Guárdalo en tu teléfono.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1458,6 +1495,9 @@
             const horarioContent = document.getElementById('dashHorarioContent');
             const faltasContent  = document.getElementById('dashFaltasContent');
 
+            // ── Generar QR de la matrícula ──────────────────────
+            generarQRAlumno(s);
+
             if (!s.grupoId) {
                 horarioContent.innerHTML = `
                     <div class="text-center py-16 text-slate-400">
@@ -1719,6 +1759,118 @@
                     </div>`;
             }
         }
+
+        // ==========================================
+        //  MÓDULO QR
+        // ==========================================
+        function generarQRAlumno(alumno) {
+            const container = document.getElementById('dashQRContainer');
+            const nombreEl  = document.getElementById('dashQRNombre');
+            const matEl     = document.getElementById('dashQRMatricula');
+            const carreraEl = document.getElementById('dashQRCarrera');
+            if (!container || !alumno?.matricula) return;
+            if (nombreEl)  nombreEl.textContent  = alumno.nombre || '';
+            if (matEl)     matEl.textContent      = alumno.matricula;
+            if (carreraEl) carreraEl.textContent  = `${alumno.carrera || ''} · ${alumno.grupoNombre || 'Sin grupo'}`;
+            container.innerHTML = '';
+            try {
+                new QRCode(container, {
+                    text: alumno.matricula, width: 160, height: 160,
+                    colorDark: '#0f172a', colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } catch(e) {
+                container.innerHTML = `<p class="text-xs text-red-400 p-4">Error al generar QR</p>`;
+            }
+        }
+
+        window.descargarQR = () => {
+            const s = currentStudent;
+            if (!s) return;
+            setTimeout(() => {
+                const canvas = document.querySelector('#dashQRContainer canvas');
+                const img    = document.querySelector('#dashQRContainer img');
+                let src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+                if (!src) { alert('QR no listo, espera un momento.'); return; }
+                _buildAndDownloadQR(src, s.matricula, s.nombre||'', s.carrera||'', s.grupoNombre||'');
+            }, 300);
+        };
+
+        function _buildAndDownloadQR(qrSrc, matricula, nombre, carrera, grupo) {
+            const cvs = document.createElement('canvas');
+            cvs.width = 320; cvs.height = 400;
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 320, 400);
+            ctx.fillStyle = '#15803d'; ctx.fillRect(0, 0, 320, 8);
+            ctx.fillStyle = '#0f172a'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('CredencialesUTN', 160, 36);
+            ctx.fillStyle = '#64748b'; ctx.font = '11px Arial';
+            ctx.fillText('Credencial de Asistencia', 160, 54);
+            const qrImg = new Image();
+            qrImg.onload = () => {
+                ctx.drawImage(qrImg, 80, 68, 160, 160);
+                ctx.fillStyle = '#15803d'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(matricula, 160, 258);
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 13px Arial';
+                ctx.fillText(nombre.substring(0, 36), 160, 280);
+                ctx.fillStyle = '#64748b'; ctx.font = '11px Arial';
+                ctx.fillText(`${carrera} · ${grupo||'Sin grupo'}`, 160, 298);
+                ctx.fillStyle = '#15803d'; ctx.fillRect(0, 392, 320, 8);
+                const link = document.createElement('a');
+                link.download = `QR_${matricula}_${nombre.split(' ')[0]||'alumno'}.png`;
+                link.href = cvs.toDataURL('image/png');
+                link.click();
+            };
+            qrImg.src = qrSrc;
+        }
+
+        window.verQRAdmin = (nombre, matricula, carrera, grupoNombre) => {
+            const overlay = document.createElement('div');
+            overlay.id = 'qrAdminOverlay';
+            overlay.className = 'fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl border p-6 w-72 flex flex-col items-center gap-4" onclick="event.stopPropagation()">
+                    <div class="w-full flex items-center justify-between">
+                        <h3 class="font-bold text-slate-800">Credencial QR</h3>
+                        <button onclick="document.getElementById('qrAdminOverlay').remove()"
+                            class="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition">
+                            <i class="ph ph-x text-lg"></i>
+                        </button>
+                    </div>
+                    <div class="bg-slate-900 rounded-2xl p-4 w-full flex flex-col items-center gap-3">
+                        <div id="qrAdminCanvas" class="bg-white p-2 rounded-xl"></div>
+                        <p class="text-white font-bold font-mono tracking-widest text-lg">${matricula}</p>
+                        <p class="text-slate-300 text-xs text-center leading-tight">${nombre}</p>
+                        <p class="text-slate-500 text-[10px]">${carrera} · ${grupoNombre||'Sin grupo'}</p>
+                    </div>
+                    <button onclick="descargarQRAdmin('${matricula}','${(nombre||'').replace(/'/g,"\\'")}','${carrera}','${grupoNombre||''}')"
+                        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2">
+                        <i class="ph ph-download-simple"></i> Descargar QR
+                    </button>
+                </div>`;
+            document.body.appendChild(overlay);
+            setTimeout(() => {
+                const qrDiv = document.getElementById('qrAdminCanvas');
+                if (!qrDiv) return;
+                try {
+                    new QRCode(qrDiv, {
+                        text: matricula, width: 180, height: 180,
+                        colorDark: '#0f172a', colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                } catch(e) {}
+            }, 100);
+        };
+
+        window.descargarQRAdmin = (matricula, nombre, carrera, grupo) => {
+            setTimeout(() => {
+                const canvas = document.querySelector('#qrAdminCanvas canvas');
+                const img    = document.querySelector('#qrAdminCanvas img');
+                const src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+                if (src) _buildAndDownloadQR(src, matricula, nombre, carrera, grupo);
+            }, 200);
+        };
 
         // Descarga PDF del horario del alumno
         window.descargarHorarioPDF = async () => {
@@ -3306,6 +3458,10 @@
                                             </td>
                                             <td class="px-4 py-3 text-center">
                                                 <div class="flex items-center justify-center gap-2">
+                                                    <button onclick="verQRAdmin('${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${s.matricula||''}','${s.carrera||''}','${s.grupoNombre||''}')"
+                                                        class="bg-slate-100 text-slate-600 hover:bg-slate-200 p-2 rounded-lg transition" title="Ver QR">
+                                                        <i class="ph ph-qr-code text-lg"></i>
+                                                    </button>
                                                     <button onclick="editStudent('${s.id}','${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${s.matricula}','${s.carrera||''}','${s.grupoId||''}','${s.grupoNombre||''}')"
                                                         class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition" title="Editar">
                                                         <i class="ph ph-pencil-simple text-lg"></i>
@@ -3821,7 +3977,33 @@
                                 <input type="text" id="preregNombre" required placeholder="Nombre Completo" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none transition text-sm">
                                 <input type="text" id="preregMatricula" required placeholder="Matrícula" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none transition text-sm">
                                 <select id="preregCarrera" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-slate-500 outline-none text-sm font-medium">
-                                    <option>Ing. Software</option><option>Mecatrónica</option><option>Administración</option>
+                                    <optgroup label="── TSU ──────────────────────">
+                                        <option value="TSU TI">TSU TI — Tecnologías de la Información</option>
+                                        <option value="TSU IA">TSU IA — Inteligencia Artificial</option>
+                                        <option value="TSU Meca">TSU Meca — Mecatrónica</option>
+                                        <option value="TSU Auto">TSU Auto — Automatización</option>
+                                        <option value="TSU PI">TSU PI — Procesos Industriales</option>
+                                        <option value="TSU MI">TSU MI — Mantenimiento Industrial</option>
+                                        <option value="TSU MA">TSU MA — Manufactura Aeronáutica</option>
+                                        <option value="TSU ER">TSU ER — Energías Renovables</option>
+                                        <option value="TSU ES">TSU ES — Energía Solar</option>
+                                        <option value="TSU OCI">TSU OCI — Operaciones Comerciales Internacionales</option>
+                                        <option value="TSU OLCE">TSU OLCE — Operaciones Logísticas y Comercio Exterior</option>
+                                        <option value="TSU DNM">TSU DNM — Desarrollo de Negocios y Mercadotecnia</option>
+                                    </optgroup>
+                                    <optgroup label="── Ingeniería / Licenciatura ─">
+                                        <option value="ITIID">ITIID — Ing. en TI e Innovación Digital</option>
+                                        <option value="IDGS">IDGS — Ing. en Desarrollo y Gestión de Software</option>
+                                        <option value="IMec">IMec — Ingeniería Mecatrónica</option>
+                                        <option value="II">II — Ingeniería Industrial</option>
+                                        <option value="ISP">ISP — Ing. en Sistemas Productivos</option>
+                                        <option value="IMI">IMI — Ing. en Mantenimiento Industrial</option>
+                                        <option value="IAM">IAM — Ing. Aeronáutica en Manufactura</option>
+                                        <option value="IEDS">IEDS — Ing. en Energía y Desarrollo Sostenible</option>
+                                        <option value="ILI">ILI — Ing. en Logística Internacional</option>
+                                        <option value="LNM">LNM — Lic. en Negocios y Mercadotecnia</option>
+                                        <option value="INM">INM — Innovación de Negocios y Mercadotecnia</option>
+                                    </optgroup>
                                 </select>
                                 <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex items-center justify-center gap-2"><i class="ph ph-plus"></i> Guardar Alumno</button>
                             </form>
