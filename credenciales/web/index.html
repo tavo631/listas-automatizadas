@@ -3317,28 +3317,52 @@
 
         // --- TAB: ESTADÍSTICAS ---
         async function renderAdminStats(content) {
-            const [studSnap, groupSnap, attendSnap] = await Promise.all([
+            const [studSnap, groupSnap, asistSnap, sesSnap] = await Promise.all([
                 getDocs(getCol('students')),
                 getDocs(getCol('horarios_grupos')),
-                getDocs(getCol('attendance'))
+                getDocs(getCol('asistencias')),
+                getDocs(getCol('sesiones_scan'))
             ]);
 
-            const totalStudents = studSnap.size;
-            const totalGroups = groupSnap.size;
-            const totalAttendance = attendSnap.size;
-            const avgAttendance = totalStudents > 0 ? Math.round((totalAttendance / (totalStudents * 5)) * 100) : 0;
+            // Deduplicar: solo el registro más reciente por alumno+materia+día
+            const mejorPorDia = {};
+            asistSnap.forEach(d => {
+                const a = d.data();
+                if (!a.alumnoId || !a.materia || !a.fecha) return;
+                const dia = a.fecha.split('T')[0];
+                const key = `${a.alumnoId}||${a.materia}||${dia}`;
+                const prev = mejorPorDia[key];
+                if (!prev || new Date(a.fecha) > new Date(prev.fecha)) {
+                    mejorPorDia[key] = { ...a, id: d.id };
+                }
+            });
+            const registrosDedup = Object.values(mejorPorDia);
 
-            const countMap = {};
-            attendSnap.forEach(doc => {
-                const sid = doc.data().studentId;
-                countMap[sid] = (countMap[sid] || 0) + 1;
+            // Sesiones únicas por día (deduplicadas)
+            const sesionesUnicasDias = new Set();
+            sesSnap.forEach(d => {
+                const s = d.data();
+                if (s.grupoId && s.materia && s.iniciada)
+                    sesionesUnicasDias.add(`${s.grupoId}||${s.materia}||${s.iniciada.split('T')[0]}`);
             });
 
-            const nameMap = {};
-            studSnap.forEach(doc => { nameMap[doc.id] = doc.data().nombre; });
+            const totalStudents   = studSnap.size;
+            const totalGroups     = groupSnap.size;
+            const totalAsistencias = registrosDedup.filter(r => r.tipo !== 'falta').length;
+            const totalSesiones   = sesionesUnicasDias.size;
+            const avgAttendance   = totalSesiones > 0 && totalStudents > 0
+                ? Math.round((totalAsistencias / (totalStudents * totalSesiones)) * 100) : 0;
+
+            // Conteo por alumno para gráfico
+            const countMap = {};
+            const nameMap  = {};
+            studSnap.forEach(d => { nameMap[d.id] = d.data().nombre; });
+            registrosDedup.forEach(r => {
+                if (r.tipo !== 'falta') countMap[r.alumnoId] = (countMap[r.alumnoId] || 0) + 1;
+            });
 
             const chartLabels = Object.keys(countMap).map(id => nameMap[id] ? nameMap[id].split(' ')[0] : id.substring(0,6));
-            const chartData = Object.values(countMap);
+            const chartData   = Object.values(countMap);
 
             content.innerHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -3347,8 +3371,12 @@
                         <div class="text-gray-500 text-sm mt-1"><i class="ph ph-books"></i> Grupos Activos</div>
                     </div>
                     <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
-                        <div class="text-3xl font-bold text-green-600">${totalAttendance}</div>
+                        <div class="text-3xl font-bold text-green-600">${totalAsistencias}</div>
                         <div class="text-gray-500 text-sm mt-1"><i class="ph ph-clipboard-text"></i> Asistencias</div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
+                        <div class="text-3xl font-bold text-slate-700">${totalSesiones}</div>
+                        <div class="text-gray-500 text-sm mt-1"><i class="ph ph-calendar-check"></i> Sesiones únicas</div>
                     </div>
                     <div class="bg-white rounded-2xl p-5 border shadow-sm text-center">
                         <div class="text-3xl font-bold text-purple-600">${avgAttendance}%</div>
@@ -3749,10 +3777,40 @@
             const sesMap = {};
             sesSnap.forEach(d => { sesMap[d.id] = d.data(); });
 
-            // Registros de asistencias ordenados por fecha desc
-            const registros = [];
-            asistSnap.forEach(d => registros.push({ id: d.id, ...d.data() }));
-            registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            // ── Paso 1: Determinar la ÚLTIMA sesión de cada grupo+materia+día ──
+            // Si el profe reinició la lista varias veces en el mismo día, solo cuenta la última
+            const ultimaSesionDelDia = {}; // grupoId||materia||día → { sesionId, iniciada }
+            sesSnap.forEach(d => {
+                const s = d.data();
+                if (!s.grupoId || !s.materia || !s.iniciada) return;
+                const dia = s.iniciada.split('T')[0];
+                const key = `${s.grupoId}||${s.materia}||${dia}`;
+                const prev = ultimaSesionDelDia[key];
+                if (!prev || new Date(s.iniciada) > new Date(prev.iniciada)) {
+                    ultimaSesionDelDia[key] = { sesionId: d.id, iniciada: s.iniciada };
+                }
+            });
+            // Set de sesionIds que son "la última del día"
+            const sesionesValidas = new Set(Object.values(ultimaSesionDelDia).map(s => s.sesionId));
+
+            // ── Paso 2: Filtrar registros — solo los de sesiones válidas (última del día) ──
+            // Para cada alumno+materia+día, quedarse con el registro de la sesión más reciente
+            const mejorPorDia = {}; // alumnoId||grupoId||materia||día → registro
+            asistSnap.forEach(d => {
+                const r = { id: d.id, ...d.data() };
+                if (!r.alumnoId || !r.materia || !r.grupoId || !r.fecha || !r.sesionId) return;
+                // Solo procesar registros de sesiones válidas (últimas del día)
+                if (!sesionesValidas.has(r.sesionId)) return;
+                const dia = r.fecha.split('T')[0];
+                const key = `${r.alumnoId}||${r.grupoId}||${r.materia}||${dia}`;
+                const prev = mejorPorDia[key];
+                if (!prev || new Date(r.fecha) > new Date(prev.fecha)) {
+                    mejorPorDia[key] = r;
+                }
+            });
+            const registros = Object.values(mejorPorDia)
+                .filter(r => r.tipo !== 'falta') // historial solo muestra asistencias/retardos
+                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             if (registros.length === 0) {
                 content.innerHTML = `
@@ -6127,37 +6185,68 @@
             const alumnos = [];
             studSnap.forEach(d => alumnos.push({ id: d.id, ...d.data() }));
 
-            // Sesiones por grupo+materia → cuántas hubo
-            const sesionesPorGrupoMat = {}; // grupoId+materia → count
+            // Determinar la ÚLTIMA sesión por grupo+materia+día
+            const ultimaSesionRF = {};
             sesSnap.forEach(d => {
                 const s = d.data();
-                if (!s.grupoId || !s.materia) return;
-                const key = s.grupoId + '||' + s.materia;
-                sesionesPorGrupoMat[key] = (sesionesPorGrupoMat[key] || 0) + 1;
+                if (!s.grupoId || !s.materia || !s.iniciada) return;
+                const dia = s.iniciada.split('T')[0];
+                const key = `${s.grupoId}||${s.materia}||${dia}`;
+                const prev = ultimaSesionRF[key];
+                if (!prev || new Date(s.iniciada) > new Date(prev.iniciada)) {
+                    ultimaSesionRF[key] = { sesionId: d.id, iniciada: s.iniciada };
+                }
+            });
+            const sesionesValidasRF = new Set(Object.values(ultimaSesionRF).map(s => s.sesionId));
+
+            // Sesiones únicas por grupo+materia (contando solo la última de cada día)
+            const sesionesPorGrupoMat = {}; // grupoId||materia → Set de días
+            Object.entries(ultimaSesionRF).forEach(([key]) => {
+                const [grupoId, materia, dia] = key.split('||');
+                const k2 = `${grupoId}||${materia}`;
+                if (!sesionesPorGrupoMat[k2]) sesionesPorGrupoMat[k2] = new Set();
+                sesionesPorGrupoMat[k2].add(dia);
             });
 
-            // Asistencias por alumno+materia
-            const asistPorAlumnoMat = {}; // alumnoId+materia → count
+            // Asistencias: solo de sesiones válidas, el más reciente del día
+            const asistMejorPorDia = {}; // alumnoId||materia||día → { tipo, fecha }
             asistSnap.forEach(d => {
                 const a = d.data();
-                if (!a.alumnoId || !a.materia) return;
-                const key = a.alumnoId + '||' + a.materia;
-                asistPorAlumnoMat[key] = (asistPorAlumnoMat[key] || 0) + 1;
+                if (!a.alumnoId || !a.materia || !a.fecha || !a.sesionId) return;
+                if (!sesionesValidasRF.has(a.sesionId)) return; // ignorar sesiones no-últimas
+                const dia = a.fecha.split('T')[0];
+                const key = `${a.alumnoId}||${a.materia}||${dia}`;
+                const prev = asistMejorPorDia[key];
+                if (!prev || new Date(a.fecha) > new Date(prev.fecha)) {
+                    asistMejorPorDia[key] = { tipo: a.tipo || 'falta', fecha: a.fecha };
+                }
+            });
+
+            // Contar asistencias reales por alumno+materia (excluyendo faltas)
+            const asistPorAlumnoMat = {}; // alumnoId||materia → { asist, retardos }
+            Object.entries(asistMejorPorDia).forEach(([key, reg]) => {
+                const parts = key.split('||');
+                const k2 = `${parts[0]}||${parts[1]}`;
+                if (!asistPorAlumnoMat[k2]) asistPorAlumnoMat[k2] = { asist: 0, retardos: 0 };
+                if (reg.tipo !== 'falta') {
+                    asistPorAlumnoMat[k2].asist++;
+                    if (reg.tipo === 'retardo') asistPorAlumnoMat[k2].retardos++;
+                }
             });
 
             // Para cada alumno calcular faltas totales cruzando sus sesiones
             const reporteAlumnos = alumnos
-                .filter(a => a.grupoId) // solo los que tienen grupo
+                .filter(a => a.grupoId)
                 .map(alumno => {
-                    // materias relevantes: las que tienen sesiones en su grupo
                     const materiasAlumno = Object.keys(sesionesPorGrupoMat)
                         .filter(k => k.startsWith(alumno.grupoId + '||'))
                         .map(k => k.split('||')[1]);
 
-                    let totalSesiones = 0, totalAsist = 0, totalFaltas = 0, totalRetardos = 0;
+                    let totalSesiones = 0, totalAsist = 0, totalFaltas = 0;
                     const detalleXmateria = materiasAlumno.map(mat => {
-                        const sesiones = sesionesPorGrupoMat[alumno.grupoId + '||' + mat] || 0;
-                        const asist    = asistPorAlumnoMat[alumno.id + '||' + mat] || 0;
+                        const sesiones = sesionesPorGrupoMat[alumno.grupoId + '||' + mat]?.size || 0;
+                        const datos    = asistPorAlumnoMat[alumno.id + '||' + mat] || { asist: 0, retardos: 0 };
+                        const asist    = datos.asist;
                         const faltas   = Math.max(0, sesiones - asist);
                         totalSesiones += sesiones;
                         totalAsist    += asist;
@@ -6168,7 +6257,7 @@
                     const pct = totalSesiones > 0 ? Math.round((totalAsist / totalSesiones) * 100) : 100;
                     return { ...alumno, totalSesiones, totalAsist, totalFaltas, pct, detalleXmateria };
                 })
-                .sort((a, b) => a.pct - b.pct); // más críticos primero
+                .sort((a, b) => a.pct - b.pct);
 
             const enRiesgo  = reporteAlumnos.filter(a => a.pct < 70).length;
             const regulares = reporteAlumnos.filter(a => a.pct >= 70 && a.totalSesiones > 0).length;
