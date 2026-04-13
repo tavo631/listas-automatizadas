@@ -84,7 +84,6 @@
                     <li><a href="#" onclick="router('home')" class="hover:text-green-700 transition nav-link" id="nav-home">Inicio</a></li>
                     <li><a href="#" onclick="router('servicios')" class="hover:text-green-700 transition nav-link" id="nav-servicios">Servicios</a></li>
                     <li><a href="#" onclick="router('proyecto')" class="hover:text-green-700 transition nav-link text-green-700" id="nav-proyecto"> Proyecto</a></li>
-                    <li><a href="#" onclick="router('scanner')" class="hover:text-green-700 transition nav-link" id="nav-scanner">Escáner</a></li>
                 </ul>
                 <div class="h-6 w-px bg-gray-300"></div>
                 <!-- Menú Utilidad -->
@@ -113,7 +112,6 @@
             <button onclick="toggleMobileMenu()" class="absolute top-4 right-4 text-slate-600 text-2xl"><i class="ph ph-x"></i></button>
             <a href="#" onclick="router('home'); toggleMobileMenu()" class="text-lg border-b pb-2">Inicio</a>
             <a href="#" onclick="router('servicios'); toggleMobileMenu()" class="text-lg border-b pb-2">Servicios</a>
-            <a href="#" onclick="router('scanner'); toggleMobileMenu()" class="text-lg border-b pb-2">Escáner</a>
             <a href="#" onclick="router('registro'); toggleMobileMenu()" class="text-lg border-b pb-2">Registro</a>
             <a href="#" onclick="router('proyecto'); toggleMobileMenu()" class="text-lg border-b pb-2 font-bold text-green-700">Documentación</a>
             <a href="#" onclick="router('sitemap'); toggleMobileMenu()" class="text-lg border-b pb-2 text-gray-500">Mapa del Sitio</a>
@@ -311,7 +309,6 @@
                             <h1 class="text-4xl md:text-6xl font-bold my-6">Control de Acceso <span class="text-green-400">Inteligente</span></h1>
                             <p class="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">Plataforma segura para la gestión de identidad, control docente y asistencia académica mediante tecnología web progresiva.</p>
                             <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                                <button onclick="router('scanner')" class="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg transition transform hover:-translate-y-1"><i class="ph ph-qr-code"></i> Escanear</button>
                                 <button onclick="router('registro')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-8 py-3 rounded-xl font-bold transition">Registrarse</button>
                             </div>
                         </div>
@@ -612,87 +609,44 @@
                     <div id="dashHeader" class="bg-white p-6 rounded-2xl shadow-sm border mb-6 flex items-center justify-between gap-4 flex-wrap">
                         <!-- Inyectado por JS -->
                     </div>
-                    <div id="claseActivaBanner" class="hidden mb-6"></div>
 
-                    <!-- Grid principal: horario + registrar asistencia -->
-                    <div class="grid lg:grid-cols-3 gap-6 items-start">
-
-                        <!-- Horario semanal (2 columnas) -->
-                        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border">
-                            <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                    <i class="ph ph-calendar-blank text-green-600"></i> Mi Horario Semanal
-                                </h3>
+                    <!-- Horario semanal (ancho completo) -->
+                    <div class="bg-white rounded-2xl shadow-sm border mb-6">
+                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
+                            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <i class="ph ph-calendar-blank text-green-600"></i> Mi Horario Semanal
+                            </h3>
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <span id="dashGrupoBadge" class="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hidden"></span>
-                            </div>
-                            <div id="dashHorarioContent" class="p-5">
-                                <div class="flex justify-center py-10">
-                                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
-                                </div>
+                                <button onclick="descargarHorarioPDF()" id="btnDescargaHorario"
+                                    class="hidden text-xs font-bold bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                                    <i class="ph ph-file-pdf"></i> Descargar PDF
+                                </button>
                             </div>
                         </div>
-
-                        <!-- Panel lateral: registrar asistencia -->
-                        <div class="flex flex-col gap-4">
-
-                            <!-- Tarjeta registrar asistencia -->
-                            <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                                <div class="bg-gradient-to-br from-green-700 to-green-900 p-5 text-white">
-                                    <div class="flex items-center gap-3 mb-1">
-                                        <div class="bg-white/20 rounded-xl p-2.5">
-                                            <i class="ph ph-clipboard-text text-2xl"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-bold text-lg leading-tight">Registrar Asistencia</h3>
-                                            <p class="text-green-200 text-xs">Confirma tu presencia en clase</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="p-5 space-y-4">
-                                    <!-- Clase activa para registrar -->
-                                    <div id="asistenciaClaseInfo" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-500 text-center">
-                                        <i class="ph ph-clock text-lg mb-1 block opacity-50"></i>
-                                        <span class="text-xs">Disponible durante una clase activa</span>
-                                    </div>
-
-                                    <!-- Botón principal -->
-                                    <button id="btnRegistrarAsistencia" disabled
-                                        class="w-full bg-slate-300 text-slate-500 cursor-not-allowed font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 text-sm">
-                                        <i class="ph ph-check-circle text-xl"></i> Registrar mi Asistencia
-                                    </button>
-
-                                    <!-- Info de restricción -->
-                                    <p class="text-[10px] text-gray-400 text-center leading-relaxed">
-                                        El botón se activa automáticamente<br>cuando hay una clase en curso.
-                                    </p>
-                                </div>
+                        <div id="dashHorarioContent" class="p-5">
+                            <div class="flex justify-center py-10">
+                                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
                             </div>
-
-                            <!-- Tarjeta resumen rápido -->
-                            <div class="bg-white rounded-2xl shadow-sm border p-5">
-                                <h4 class="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
-                                    <i class="ph ph-chart-bar text-green-600"></i> Esta semana
-                                </h4>
-                                <div class="space-y-2">
-                                    <div class="flex justify-between items-center text-sm">
-                                        <span class="text-slate-500">Asistencias</span>
-                                        <span id="contAsistencias" class="font-bold text-green-600">—</span>
-                                    </div>
-                                    <div class="flex justify-between items-center text-sm">
-                                        <span class="text-slate-500">Faltas</span>
-                                        <span id="contFaltas" class="font-bold text-red-400">—</span>
-                                    </div>
-                                    <div class="w-full bg-slate-100 rounded-full h-2 mt-3">
-                                        <div id="barraAsistencia" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                                    </div>
-                                    <p class="text-[10px] text-gray-400 text-center" id="pctAsistencia">Cargando...</p>
-                                </div>
-                            </div>
-
                         </div>
                     </div>
 
-                    <div class="text-center mt-6">
+                    <!-- Faltas detalladas por clase -->
+                    <div class="bg-white rounded-2xl shadow-sm border mb-6">
+                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-2">
+                            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <i class="ph ph-clipboard-text text-red-500"></i> Mis Asistencias y Faltas
+                            </h3>
+                            <span id="dashFaltasBadge" class="text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-full hidden"></span>
+                        </div>
+                        <div id="dashFaltasContent" class="p-5">
+                            <div class="flex justify-center py-8">
+                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-red-400"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
                         <button onclick="logout()" class="text-red-400 text-sm font-medium hover:text-red-600 transition flex items-center gap-1 justify-center mx-auto">
                             <i class="ph ph-sign-out"></i> Cerrar Sesión
                         </button>
@@ -780,6 +734,131 @@
                         </div>
                     </div>
 
+                    <!-- ─── PANEL: PASAR LISTA ─── -->
+                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden mt-6">
+                        <div class="bg-gradient-to-r from-green-800 to-green-900 p-5 text-white flex items-center justify-between flex-wrap gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-white/20 rounded-xl p-2.5"><i class="ph ph-scan text-2xl"></i></div>
+                                <div>
+                                    <h3 class="font-bold text-lg leading-tight">Pasar Lista</h3>
+                                    <p class="text-green-200 text-xs">Inicia la sesión y registra las matrículas tú mismo</p>
+                                </div>
+                            </div>
+                            <div id="sesionEstadoBadge" class="text-xs font-bold px-3 py-1.5 rounded-full bg-white/20 border border-white/30 text-white">
+                                Sin sesión activa
+                            </div>
+                        </div>
+
+                        <div class="p-5" id="sesionPanel">
+                            <!-- Formulario nueva sesión -->
+                            <div id="sesionFormPanel">
+                                <p class="text-sm text-slate-500 mb-4">Selecciona la clase, configura la tolerancia de retardo e inicia. Tú eres quien registra cada matrícula.</p>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Clase a iniciar</label>
+                                        <select id="sesionClaseSelect" class="w-full p-3 rounded-xl border bg-slate-50 focus:bg-white focus:border-green-500 outline-none text-sm font-medium">
+                                            <option value="">-- Selecciona una clase --</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Tolerancia de retardo (min)</label>
+                                        <select id="sesionTolerancia" class="w-full p-3 rounded-xl border bg-slate-50 focus:bg-white focus:border-green-500 outline-none text-sm font-bold">
+                                            <option value="5">5 min</option>
+                                            <option value="10">10 min</option>
+                                            <option value="15" selected>15 min</option>
+                                            <option value="20">20 min</option>
+                                        </select>
+                                    </div>
+                                    <button onclick="iniciarSesionScan()"
+                                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-100 mt-2">
+                                        <i class="ph ph-play-circle text-xl"></i> Iniciar — Pasar Lista
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Sesión activa + escáner integrado -->
+                            <div id="sesionActivaPanel" class="hidden space-y-4">
+
+                                <!-- Info sesión + timer -->
+                                <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
+                                    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse inline-block"></span>
+                                            <span class="text-green-800 font-bold text-sm">Sesión activa</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span id="sesionTimerDisplay" class="text-xs font-bold bg-green-200 text-green-900 px-3 py-1 rounded-full"></span>
+                                            <button onclick="terminarSesionScan()"
+                                                class="text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded-full border border-red-200 transition flex items-center gap-1">
+                                                <i class="ph ph-stop-circle"></i> Terminar
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p id="sesionClaseLabel" class="font-bold text-green-900 text-sm leading-tight"></p>
+                                    <p id="sesionDetalleLabel" class="text-green-700 text-xs mt-0.5"></p>
+                                    <div class="mt-3 pt-3 border-t border-green-200 flex gap-4 text-center">
+                                        <div class="flex-1">
+                                            <p class="text-2xl font-bold text-green-800" id="sesionCountPuntuales">0</p>
+                                            <p class="text-[10px] text-green-600 uppercase tracking-wider">Puntuales</p>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="text-2xl font-bold text-amber-600" id="sesionCountRetardos">0</p>
+                                            <p class="text-[10px] text-amber-600 uppercase tracking-wider">Retardos</p>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="text-2xl font-bold text-slate-600" id="sesionCountTotal">0</p>
+                                            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Total</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tolerancia restante -->
+                                <div id="sesionToleranciaBar" class="text-xs text-center font-medium py-2 px-4 rounded-xl border bg-green-50 border-green-200 text-green-700"></div>
+
+                                <!-- INPUT ESCÁNER -->
+                                <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl p-4 focus-within:border-green-400 focus-within:bg-green-50 transition-all">
+                                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 text-center">
+                                        <i class="ph ph-barcode"></i> Escanea o escribe la matrícula
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <input
+                                            type="text" id="profScanInput"
+                                            placeholder="Matrícula (8 dígitos)..."
+                                            maxlength="8" inputmode="numeric" autocomplete="off"
+                                            class="flex-grow py-4 px-4 text-2xl font-bold tracking-widest text-center rounded-xl border-2 border-slate-200 focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition bg-white"
+                                            oninput="this.value=this.value.replace(/[^0-9]/g,''); profScanValidar(this.value)"
+                                            onkeydown="if(event.key==='Enter'){ profRegistrarScan(); this.select(); }">
+                                        <button id="btnProfScan" onclick="profRegistrarScan()" disabled
+                                            class="flex-shrink-0 bg-slate-300 cursor-not-allowed text-slate-500 font-bold px-5 rounded-xl transition flex flex-col items-center justify-center gap-1 text-xs min-w-[64px]">
+                                            <i class="ph ph-check-circle text-2xl"></i>
+                                            <span>OK</span>
+                                        </button>
+                                    </div>
+                                    <p id="profScanMsg" class="mt-1.5 text-xs text-center font-medium text-slate-400 min-h-[16px]"></p>
+                                    <p class="text-center text-[10px] text-slate-400 mt-2">
+                                        Con escáner USB: enfoca el campo y escanea — registra automáticamente al leer
+                                    </p>
+                                </div>
+
+                                <!-- Último registro -->
+                                <div id="profScanUltimo" class="hidden rounded-2xl border overflow-hidden">
+                                    <div id="profScanUltimoHeader" class="p-3 flex items-center gap-3"></div>
+                                    <div id="profScanUltimoInfo" class="px-4 pb-3 text-xs border-t border-slate-100 pt-2 text-slate-600"></div>
+                                </div>
+
+                                <!-- Historial de la sesión -->
+                                <div id="profScanHistorial" class="hidden">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Registros de esta sesión</h4>
+                                        <span id="profScanHistorialCount" class="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full"></span>
+                                    </div>
+                                    <div id="profScanHistorialLista" class="space-y-1.5 max-h-64 overflow-y-auto pr-1"></div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="text-center mt-6">
                         <button onclick="logoutProfesor()" class="text-red-400 text-sm font-medium hover:text-red-600 transition flex items-center gap-1 justify-center mx-auto">
                             <i class="ph ph-sign-out"></i> Cerrar Sesión
@@ -787,20 +866,20 @@
                     </div>
                 </div>
             `,
-            // 7. ESCÁNER
+            // 7. ESCÁNER — redirige al portal docente
             scanner: `
-                <div class="fade-in max-w-md mx-auto text-center mt-8">
-                    <h2 class="text-2xl font-bold mb-6">Escáner de Asistencia</h2>
-                    <div class="bg-slate-900 rounded-3xl overflow-hidden relative h-80 mb-6 group cursor-pointer shadow-xl border-4 border-slate-800" onclick="document.getElementById('fileInput').click()">
-                        <div class="scan-line z-10"></div>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center z-20 text-white">
-                            <i class="ph ph-camera text-5xl mb-3 text-green-400"></i>
-                            <span class="text-sm font-medium">Toque para simular escaneo de QR</span>
+                <div class="fade-in max-w-sm mx-auto mt-20 text-center">
+                    <div class="bg-white rounded-2xl shadow-lg border p-10">
+                        <div class="w-16 h-16 bg-green-100 text-green-700 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-5">
+                            <i class="ph ph-lock-key"></i>
                         </div>
-                        <input type="file" id="fileInput" class="hidden">
-                    </div>
-                    <div id="scanRes" class="hidden p-4 bg-green-50 text-green-800 rounded-xl font-bold border border-green-200">
-                        <i class="ph ph-check-circle"></i> Asistencia Registrada
+                        <h2 class="text-xl font-bold text-slate-800 mb-2">Escáner exclusivo para docentes</h2>
+                        <p class="text-slate-500 text-sm mb-6">El registro de asistencia lo realiza el profesor desde su portal. Inicia sesión como docente para acceder.</p>
+                        <button onclick="router('profesorLogin')"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2">
+                            <i class="ph ph-chalkboard-teacher text-lg"></i> Ir al Portal Docente
+                        </button>
+                        <button onclick="router('home')" class="mt-3 text-sm text-slate-400 hover:text-slate-600 transition">← Volver al inicio</button>
                     </div>
                 </div>
             `,
@@ -938,6 +1017,9 @@
                         <button onclick="adminTab('attendance')" id="tab-attendance" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-clipboard-text"></i> Asistencias
                         </button>
+                        <button onclick="adminTab('reporteFaltas')" id="tab-reporteFaltas" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
+                            <i class="ph ph-warning-circle text-red-500"></i> Reporte de Faltas
+                        </button>
                         <button onclick="adminTab('preregistros')" id="tab-preregistros" class="admin-tab px-5 py-2.5 rounded-lg text-sm font-bold bg-white border hover:bg-slate-50 transition whitespace-nowrap">
                             <i class="ph ph-user-plus"></i> Pre-registros
                         </button>
@@ -983,7 +1065,7 @@
                 bindVerifyEmail();
             } else if (route === 'forgotPassword') bindForgotPassword();
             else if (route === 'verification') bind2FA();
-            else if (route === 'scanner') bindScanner();
+            else if (route === 'scanner') await bindScanner();
             else if (route === 'adminLogin') bindAdminLogin();
             else if (route === 'adminPanel') {
                 if (!currentAdmin) { router('adminLogin'); return; }
@@ -991,7 +1073,8 @@
             } else if (route === 'profesorLogin') bindProfesorLogin();
             else if (route === 'profesorDashboard') {
                 if (!currentProfesor) { router('profesorLogin'); return; }
-                renderProfesorDashboard();
+                await renderProfesorDashboard();
+                setTimeout(cargarClasesSesionSelect, 200);
             }
         };
 
@@ -1352,7 +1435,7 @@
             };
         }
 
-        // Dashboard
+        // Dashboard alumno
         async function renderDashboard() {
             const s = currentStudent;
 
@@ -1373,7 +1456,7 @@
             `;
 
             const horarioContent = document.getElementById('dashHorarioContent');
-            const banner = document.getElementById('claseActivaBanner');
+            const faltasContent  = document.getElementById('dashFaltasContent');
 
             if (!s.grupoId) {
                 horarioContent.innerHTML = `
@@ -1382,6 +1465,7 @@
                         <p class="font-medium text-slate-500">No tienes un grupo asignado todavía.</p>
                         <p class="text-sm mt-1">Contacta a administración para que te asignen a un grupo.</p>
                     </div>`;
+                faltasContent.innerHTML = '';
                 return;
             }
 
@@ -1392,212 +1476,318 @@
                     return;
                 }
 
-                const grupoData = grupoDoc.data();
-                const bloques = grupoData.bloques || [];
-                const turno = grupoData.turno || 'Matutino';
-                const horasDelTurno = window.turnos[turno] || window.turnos['Matutino'];
-                const dias = window.gridDays;
+                const grupoData  = grupoDoc.data();
+                const bloques    = grupoData.bloques || [];
+                const turno      = grupoData.turno || 'Matutino';
+                const horasTurno = window.turnos[turno] || window.turnos['Matutino'];
+                const dias       = window.gridDays;
 
+                // Badge grupo y botón PDF
                 const badge = document.getElementById('dashGrupoBadge');
                 badge.textContent = grupoData.grupo + ' — ' + turno;
                 badge.classList.remove('hidden');
-
-                // Detectar clase activa
-                const ahora = new Date();
-                const diaActualIdx = ahora.getDay();
-                const diasMap = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes' };
-                const diaActualNombre = diasMap[diaActualIdx] || null;
-                const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
-
-                let claseEnCurso = null;
-                if (diaActualNombre) {
-                    for (const b of bloques) {
-                        if (b.dia !== diaActualNombre) continue;
-                        const [h, m] = b.hora.split(':').map(Number);
-                        const inicioMin = h * 60 + m;
-                        const finMin = inicioMin + (b.duracion || 1) * 60;
-                        if (horaActual >= inicioMin && horaActual < finMin) { claseEnCurso = b; break; }
-                    }
+                const btnPDF = document.getElementById('btnDescargaHorario');
+                if (btnPDF) {
+                    btnPDF.classList.remove('hidden');
+                    // guardar datos para el PDF
+                    window._dashGrupoData = { grupoData, bloques, turno, horasTurno, dias, alumno: s };
                 }
 
-                // Banner clase en curso + activar panel de asistencia
-                if (claseEnCurso) {
-                    banner.classList.remove('hidden');
-                    banner.innerHTML = `
-                        <div class="bg-green-600 text-white rounded-2xl p-5 flex items-center justify-between gap-4 shadow-lg flex-wrap">
-                            <div class="flex items-center gap-4">
-                                <div class="bg-white/20 rounded-xl p-3 flex-shrink-0"><i class="ph ph-book-open-text text-3xl"></i></div>
-                                <div>
-                                    <p class="text-green-100 text-xs font-bold uppercase tracking-wider mb-0.5">Clase en curso ahora</p>
-                                    <h3 class="text-xl font-bold leading-tight">${claseEnCurso.materia}</h3>
-                                    <p class="text-green-100 text-sm mt-0.5">
-                                        <i class="ph ph-clock"></i> ${claseEnCurso.hora} &bull;
-                                        <i class="ph ph-map-pin"></i> ${claseEnCurso.salon || 'S/A'} &bull;
-                                        <i class="ph ph-chalkboard-teacher"></i> ${claseEnCurso.profNombre || 'Docente'}
-                                    </p>
-                                </div>
-                            </div>
-                            <span class="flex items-center gap-1.5 bg-white/20 border border-white/30 text-white text-xs font-bold px-3 py-2 rounded-full">
-                                <span class="w-2 h-2 bg-white rounded-full animate-pulse inline-block"></span> En vivo
-                            </span>
-                        </div>`;
-
-                    // Activar panel lateral de asistencia
-                    const infoEl = document.getElementById('asistenciaClaseInfo');
-                    const btnEl  = document.getElementById('btnRegistrarAsistencia');
-                    if (infoEl) infoEl.innerHTML = `
-                        <div class="flex items-center gap-3 text-left">
-                            <div class="bg-green-100 text-green-700 rounded-lg p-2 flex-shrink-0">
-                                <i class="ph ph-book-open-text text-xl"></i>
-                            </div>
-                            <div>
-                                <p class="font-bold text-slate-800 text-xs leading-tight">${claseEnCurso.materia}</p>
-                                <p class="text-[10px] text-slate-500 mt-0.5">
-                                    <i class="ph ph-map-pin"></i> ${claseEnCurso.salon || 'S/A'} &bull; ${claseEnCurso.hora}
-                                </p>
-                            </div>
-                        </div>`;
-                    if (btnEl) {
-                        btnEl.disabled = false;
-                        btnEl.className = 'w-full bg-green-600 hover:bg-green-700 active:scale-95 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-200';
-                    }
-                }
-
-                // Resumen de asistencias de la semana (simulado visualmente)
-                try {
-                    const ahora2 = new Date();
-                    const lunesActual = new Date(ahora2);
-                    lunesActual.setDate(ahora2.getDate() - (ahora2.getDay() === 0 ? 6 : ahora2.getDay() - 1));
-                    lunesActual.setHours(0,0,0,0);
-                    const viernesActual = new Date(lunesActual);
-                    viernesActual.setDate(lunesActual.getDate() + 5);
-
-                    const qAsist = query(
-                        getCol('asistencias'),
-                        where('alumnoId', '==', s.id)
-                    );
-                    const snapAsist = await getDocs(qAsist);
-                    let contSemana = 0;
-                    snapAsist.forEach(d => {
-                        const fecha = new Date(d.data().fecha);
-                        if (fecha >= lunesActual && fecha < viernesActual) contSemana++;
-                    });
-
-                    // Calcular total de clases que debieron haber en la semana hasta hoy
-                    const diaHoyIdx = ahora2.getDay(); // 1=Lun...5=Vie
-                    const diasPasados = ['Lunes','Martes','Miércoles','Jueves','Viernes'].slice(0, Math.max(0, diaHoyIdx));
-                    const totalEsperado = bloques.reduce((acc, b) => diasPasados.includes(b.dia) ? acc + 1 : acc, 0);
-                    const faltas = Math.max(0, totalEsperado - contSemana);
-                    const pct = totalEsperado > 0 ? Math.round((contSemana / totalEsperado) * 100) : 0;
-
-                    const elCont = document.getElementById('contAsistencias');
-                    const elFalt = document.getElementById('contFaltas');
-                    const elBarra = document.getElementById('barraAsistencia');
-                    const elPct = document.getElementById('pctAsistencia');
-                    if (elCont) elCont.textContent = contSemana;
-                    if (elFalt) elFalt.textContent = faltas;
-                    if (elBarra) elBarra.style.width = pct + '%';
-                    if (elPct) elPct.textContent = totalEsperado > 0 ? pct + '% de asistencia esta semana' : 'Sin clases registradas esta semana';
-                } catch(e) {
-                    const elPct = document.getElementById('pctAsistencia');
-                    if (elPct) elPct.textContent = 'Sin datos aún';
-                }
+                // ── Horario ──────────────────────────────
+                const ahora         = new Date();
+                const diaActualNombre = { 1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes' }[ahora.getDay()] || null;
 
                 if (bloques.length === 0) {
-                    horarioContent.innerHTML = `
-                        <div class="text-center py-12 text-slate-400">
-                            <i class="ph ph-calendar-blank text-5xl mb-3 opacity-40"></i>
-                            <p class="font-medium">Tu grupo aún no tiene clases programadas.</p>
-                        </div>`;
-                    return;
-                }
-
-                // Construir mapa de bloques
-                const mapa = {};
-                dias.forEach(d => { mapa[d] = {}; });
-                bloques.forEach(b => {
-                    if (!mapa[b.dia]) return;
-                    const idx = horasDelTurno.indexOf(b.hora);
-                    for (let i = 0; i < (b.duracion || 1); i++) {
-                        const h = horasDelTurno[idx + i];
-                        if (!h) continue;
-                        if (!mapa[b.dia][h]) mapa[b.dia][h] = [];
-                        mapa[b.dia][h].push({ ...b, esInicio: i === 0 });
-                    }
-                });
-
-                const horasUsadas = horasDelTurno.filter(h => dias.some(d => mapa[d][h] && mapa[d][h].length > 0));
-
-                if (horasUsadas.length === 0) {
-                    horarioContent.innerHTML = `<div class="text-center py-10 text-slate-400"><p>No hay clases en el horario.</p></div>`;
-                    return;
-                }
-
-                let tabla = `<div class="overflow-x-auto"><table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-slate-50">
-                        <th class="p-3 text-left text-xs font-bold text-slate-500 uppercase border-b border-r w-20">Hora</th>
-                        ${dias.map(d => {
-                            const esHoy = d === diaActualNombre;
-                            return `<th class="p-3 text-center text-xs font-bold uppercase border-b ${esHoy ? 'text-green-700 bg-green-50' : 'text-slate-500'}">${d.substring(0,3)}${esHoy ? ' <span class=\"text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded-full ml-1\">hoy</span>' : ''}</th>`;
-                        }).join('')}
-                    </tr></thead><tbody>`;
-
-                const spanned = {};
-                horasUsadas.forEach(hora => {
-                    tabla += `<tr>`;
-                    tabla += `<td class="p-2 pr-3 text-right text-xs font-mono text-slate-400 border-r border-b whitespace-nowrap">${hora}</td>`;
-                    dias.forEach(dia => {
-                        const key = dia + '_' + hora;
-                        if (spanned[key]) return;
-                        const celdas = mapa[dia][hora];
-                        if (!celdas || celdas.length === 0) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
-                        const b = celdas[0];
-                        if (!b.esInicio) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
-                        for (let i = 1; i < (b.duracion || 1); i++) {
-                            const hSig = horasDelTurno[horasDelTurno.indexOf(hora) + i];
-                            if (hSig) spanned[dia + '_' + hSig] = true;
+                    horarioContent.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="ph ph-calendar-blank text-5xl mb-3 opacity-40"></i><p>Tu grupo aún no tiene clases programadas.</p></div>`;
+                } else {
+                    const mapa = {};
+                    dias.forEach(d => { mapa[d] = {}; });
+                    bloques.forEach(b => {
+                        if (!mapa[b.dia]) return;
+                        const idx = horasTurno.indexOf(b.hora);
+                        for (let i = 0; i < (b.duracion || 1); i++) {
+                            const h = horasTurno[idx + i];
+                            if (!h) continue;
+                            if (!mapa[b.dia][h]) mapa[b.dia][h] = [];
+                            mapa[b.dia][h].push({ ...b, esInicio: i === 0 });
                         }
-                        const esActiva = claseEnCurso && claseEnCurso.id === b.id;
-                        const colorBase = esActiva ? 'bg-green-50 border-green-300 border ring-2 ring-green-400 ring-offset-1' : 'bg-blue-50 border-blue-100 border';
-                        tabla += `<td rowspan="${b.duracion || 1}" class="border-b border-r p-2 align-top">
-                            <div class="${colorBase} rounded-lg p-2 h-full relative">
-                                ${esActiva ? '<span class=\"absolute top-1.5 right-1.5 w-2 h-2 bg-green-500 rounded-full animate-pulse\"></span>' : ''}
-                                <div class="font-bold text-xs text-slate-800 leading-tight">${b.materia}</div>
-                                <div class="text-[10px] text-slate-500 mt-1 space-y-0.5">
-                                    <div><i class="ph ph-chalkboard-teacher"></i> ${b.profNombre || '—'}</div>
-                                    <div><i class="ph ph-map-pin"></i> ${b.salon || 'S/A'}</div>
-                                </div>
-                            </div>
-                        </td>`;
                     });
-                    tabla += `</tr>`;
+                    const horasUsadas = horasTurno.filter(h => dias.some(d => mapa[d][h]?.length > 0));
+                    let tabla = `<div class="overflow-x-auto"><table class="w-full text-sm border-collapse">
+                        <thead><tr class="bg-slate-50">
+                            <th class="p-3 text-left text-xs font-bold text-slate-500 uppercase border-b border-r w-20">Hora</th>
+                            ${dias.map(d => {
+                                const esHoy = d === diaActualNombre;
+                                return `<th class="p-3 text-center text-xs font-bold uppercase border-b ${esHoy?'text-green-700 bg-green-50':'text-slate-500'}">${d.substring(0,3)}${esHoy?' <span class="text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded-full ml-1">hoy</span>':''}</th>`;
+                            }).join('')}
+                        </tr></thead><tbody>`;
+                    const spanned = {};
+                    horasUsadas.forEach(hora => {
+                        tabla += `<tr><td class="p-2 pr-3 text-right text-xs font-mono text-slate-400 border-r border-b whitespace-nowrap">${hora}</td>`;
+                        dias.forEach(dia => {
+                            const key = dia+'_'+hora;
+                            if (spanned[key]) return;
+                            const celdas = mapa[dia][hora];
+                            if (!celdas?.length) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
+                            const b = celdas[0];
+                            if (!b.esInicio) { tabla += `<td class="border-b border-r p-1"></td>`; return; }
+                            for (let i = 1; i < (b.duracion||1); i++) {
+                                const hS = horasTurno[horasTurno.indexOf(hora)+i];
+                                if (hS) spanned[dia+'_'+hS] = true;
+                            }
+                            tabla += `<td rowspan="${b.duracion||1}" class="border-b border-r p-2 align-top">
+                                <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 h-full">
+                                    <div class="font-bold text-xs text-slate-800 leading-tight">${b.materia}</div>
+                                    <div class="text-[10px] text-slate-500 mt-1 space-y-0.5">
+                                        <div><i class="ph ph-chalkboard-teacher"></i> ${b.profNombre||'—'}</div>
+                                        <div><i class="ph ph-map-pin"></i> ${b.salon||'S/A'}</div>
+                                    </div>
+                                </div>
+                            </td>`;
+                        });
+                        tabla += `</tr>`;
+                    });
+                    tabla += `</tbody></table></div>`;
+                    horarioContent.innerHTML = tabla;
+                }
+
+                // ── Faltas detalladas por materia ──────────
+                const asistSnap = await getDocs(query(getCol('asistencias'), where('alumnoId','==', s.id)));
+                const sesionesSnap = await getDocs(query(getCol('sesiones_scan'), where('grupoId','==', s.grupoId)));
+
+                // Sesiones del grupo por materia — con fecha y docente
+                const sesionesXmateria = {}; // materia → [ { id, fecha, profNombre } ]
+                sesionesSnap.forEach(d => {
+                    const ses = d.data();
+                    if (!ses.materia) return;
+                    if (!sesionesXmateria[ses.materia]) sesionesXmateria[ses.materia] = [];
+                    sesionesXmateria[ses.materia].push({ id: d.id, fecha: ses.iniciada, profNombre: ses.profNombre || '—' });
                 });
-                tabla += `</tbody></table></div>`;
-                horarioContent.innerHTML = tabla;
+
+                // Asistencias del alumno por materia — con fechas detalladas
+                const asistXmateria = {};
+                asistSnap.forEach(d => {
+                    const a = d.data();
+                    if (!a.materia) return;
+                    if (!asistXmateria[a.materia]) asistXmateria[a.materia] = { asistencias: 0, retardos: 0, fechasAsist: new Set(), registros: [] };
+                    const fechaDia = (a.fecha || '').split('T')[0];
+                    asistXmateria[a.materia].asistencias++;
+                    asistXmateria[a.materia].fechasAsist.add(fechaDia);
+                    if (a.tipo === 'retardo') asistXmateria[a.materia].retardos++;
+                    asistXmateria[a.materia].registros.push({ fecha: a.fecha, tipo: a.tipo || 'puntual' });
+                });
+
+                // Materias únicas del horario del grupo
+                const materiasGrupo = [...new Set(bloques.map(b => b.materia))];
+
+                if (materiasGrupo.length === 0) {
+                    faltasContent.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">Sin materias registradas en tu grupo.</div>`;
+                } else {
+                    let totalAsist = 0, totalSesiones = 0;
+                    const filas = materiasGrupo.map(materia => {
+                        const bloque   = bloques.find(b => b.materia === materia);
+                        const sesList  = sesionesXmateria[materia] || [];
+                        const sesiones = sesList.length;
+                        const datos    = asistXmateria[materia] || { asistencias: 0, retardos: 0, fechasAsist: new Set(), registros: [] };
+                        const asist    = datos.asistencias;
+                        const retardos = datos.retardos;
+                        const faltas   = Math.max(0, sesiones - asist);
+                        const pct      = sesiones > 0 ? Math.round((asist / sesiones) * 100) : 100;
+                        const barColor = pct >= 80 ? 'bg-green-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
+                        const estado   = sesiones === 0 ? 'Sin sesiones' : pct >= 70 ? 'Regular' : 'En riesgo';
+                        totalAsist += asist; totalSesiones += sesiones;
+
+                        // Construir detalle por día
+                        const diasAsistidos = datos.fechasAsist || new Set();
+                        const detalleHTML = sesList
+                            .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
+                            .map(ses => {
+                                const diaStr = (ses.fecha || '').split('T')[0];
+                                const asistioEseDia = diasAsistidos.has(diaStr);
+                                const reg = (datos.registros || []).find(r => (r.fecha||'').split('T')[0] === diaStr);
+                                const esRetardo = reg?.tipo === 'retardo';
+                                const fechaLabel = diaStr ? new Date(diaStr + 'T12:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'}) : '—';
+                                if (asistioEseDia) {
+                                    return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg ${esRetardo?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700'}" title="${esRetardo?'Retardo':'Puntual'}">
+                                        ${esRetardo?'⏰':'✓'} ${fechaLabel}
+                                    </span>`;
+                                } else {
+                                    return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-red-100 text-red-600" title="Falta">
+                                        ✗ ${fechaLabel}
+                                    </span>`;
+                                }
+                            }).join('');
+
+                        return { materia, bloque, sesiones, asist, retardos, faltas, pct, barColor, estado, detalleHTML };
+                    });
+
+                    const totalFaltas = Math.max(0, totalSesiones - totalAsist);
+                    const totalPct = totalSesiones > 0 ? Math.round((totalAsist/totalSesiones)*100) : 100;
+                    const badge2 = document.getElementById('dashFaltasBadge');
+                    if (badge2) {
+                        badge2.textContent = `${totalAsist} asist. · ${totalFaltas} faltas · ${totalPct}% general`;
+                        badge2.classList.remove('hidden');
+                        badge2.className = `text-xs font-bold px-3 py-1.5 rounded-full border ${totalPct >= 70 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'}`;
+                    }
+
+                    faltasContent.innerHTML = `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Materia</th>
+                                        <th class="px-4 py-3 text-center">Sesiones</th>
+                                        <th class="px-4 py-3 text-center">Asistencias</th>
+                                        <th class="px-4 py-3 text-center">Retardos</th>
+                                        <th class="px-4 py-3 text-center">Faltas</th>
+                                        <th class="px-4 py-3 text-center min-w-[130px]">Porcentaje</th>
+                                        <th class="px-4 py-3 text-center">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${filas.map((f, idx) => `
+                                    <tr class="border-t hover:bg-slate-50 transition cursor-pointer" onclick="toggleDiasFalta(${idx})">
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <i id="chevron-${idx}" class="ph ph-caret-right text-slate-400 transition-transform flex-shrink-0"></i>
+                                                <div>
+                                                    <p class="font-bold text-slate-800 leading-tight">${f.materia}</p>
+                                                    <p class="text-[10px] text-slate-400 mt-0.5">
+                                                        <i class="ph ph-chalkboard-teacher"></i> ${f.bloque?.profNombre||'—'}
+                                                        &bull; <i class="ph ph-map-pin"></i> ${f.bloque?.salon||'S/A'}
+                                                        &bull; ${f.bloque?.dia||''} ${f.bloque?.hora||''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-slate-500">${f.sesiones}</td>
+                                        <td class="px-4 py-3 text-center font-bold text-green-600">${f.asist}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${f.retardos>0?`<span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⏰ ${f.retardos}</span>`:`<span class="text-slate-300">—</span>`}
+                                        </td>
+                                        <td class="px-4 py-3 text-center font-bold ${f.faltas>0?'text-red-500':'text-slate-300'}">${f.faltas}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            <div class="flex items-center gap-2">
+                                                <div class="flex-grow bg-slate-100 rounded-full h-2">
+                                                    <div class="${f.barColor} h-2 rounded-full" style="width:${f.pct}%"></div>
+                                                </div>
+                                                <span class="font-bold text-xs min-w-[32px]">${f.pct}%</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${f.sesiones===0
+                                                ? '<span class="text-xs text-slate-400">Sin sesiones</span>'
+                                                : f.estado==='Regular'
+                                                    ? '<span class="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">Regular</span>'
+                                                    : '<span class="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">⚠ En riesgo</span>'
+                                            }
+                                        </td>
+                                    </tr>
+                                    <!-- Fila expandible con detalle de días -->
+                                    <tr id="dias-${idx}" class="hidden">
+                                        <td colspan="7" class="px-6 py-3 bg-slate-50 border-t border-b border-slate-100">
+                                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                                Detalle por sesión — <span class="text-green-600">✓ Asistió</span> &nbsp; <span class="text-amber-600">⏰ Retardo</span> &nbsp; <span class="text-red-500">✗ Falta</span>
+                                            </p>
+                                            <div class="flex flex-wrap gap-1.5">
+                                                ${f.detalleHTML || '<span class="text-xs text-slate-400">Sin sesiones registradas aún.</span>'}
+                                            </div>
+                                        </td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-[10px] text-slate-400 text-center mt-3 pb-1">
+                            <i class="ph ph-caret-right"></i> Toca una materia para ver el detalle de cada día
+                        </p>`;
+
+                    // Función para expandir/colapsar días
+                    window.toggleDiasFalta = (idx) => {
+                        const fila = document.getElementById('dias-'+idx);
+                        const chevron = document.getElementById('chevron-'+idx);
+                        if (!fila) return;
+                        fila.classList.toggle('hidden');
+                        if (chevron) chevron.style.transform = fila.classList.contains('hidden') ? '' : 'rotate(90deg)';
+                    };
+                }
 
             } catch (err) {
-                horarioContent.innerHTML = `
+                document.getElementById('dashHorarioContent').innerHTML = `
                     <div class="text-center py-10 text-red-400">
                         <i class="ph ph-warning-circle text-3xl mb-2"></i>
-                        <p class="text-sm">Error al cargar el horario: ${err.message}</p>
+                        <p class="text-sm">Error al cargar: ${err.message}</p>
                     </div>`;
             }
         }
 
-        function bindScanner() {
-            document.getElementById('fileInput').onchange = () => {
-                document.getElementById('scanRes').classList.remove('hidden');
-                setTimeout(async () => {
-                    if(currentStudent) {
-                        await addDoc(getCol('attendance'), { studentId: currentStudent.id, timestamp: new Date().toISOString() });
-                        alert('✅ Asistencia registrada exitosamente.');
-                        router('dashboard');
-                    } else {
-                        alert('Escaneo exitoso. (Debes iniciar sesión para que se guarde).');
-                    }
-                }, 1000);
-            };
-        }
+        // Descarga PDF del horario del alumno
+        window.descargarHorarioPDF = async () => {
+            const datos = window._dashGrupoData;
+            if (!datos) return;
+            const { grupoData, bloques, turno, horasTurno, dias, alumno } = datos;
+
+            const loadScript = (src) => new Promise((res, rej) => {
+                if (document.querySelector(`script[src="${src}"]`)) return res();
+                const s = document.createElement('script');
+                s.src = src; s.onload = res; s.onerror = rej;
+                document.head.appendChild(s);
+            });
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+            // Encabezado
+            pdf.setFillColor(15, 23, 42);
+            pdf.rect(0, 0, 297, 28, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(14); pdf.setFont('helvetica', 'bold');
+            pdf.text('CredencialesUTN — Mi Horario', 12, 11);
+            pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(148, 163, 184);
+            pdf.text(`${alumno.nombre}  ·  Matrícula: ${alumno.matricula}  ·  Grupo: ${grupoData.grupo} (${turno})  ·  Generado: ${new Date().toLocaleDateString('es-MX')}`, 12, 20);
+
+            // Armar datos tabla
+            const mapa = {};
+            dias.forEach(d => mapa[d] = {});
+            bloques.forEach(b => {
+                const idx = horasTurno.indexOf(b.hora);
+                for (let i = 0; i < (b.duracion||1); i++) {
+                    const h = horasTurno[idx+i];
+                    if (!h || !mapa[b.dia]) continue;
+                    if (!mapa[b.dia][h]) mapa[b.dia][h] = [];
+                    mapa[b.dia][h].push({ ...b, esInicio: i===0 });
+                }
+            });
+            const horasUsadas = horasTurno.filter(h => dias.some(d => mapa[d][h]?.length > 0));
+
+            const head = [['Hora', ...dias]];
+            const body = horasUsadas.map(hora => {
+                const fila = [hora];
+                dias.forEach(dia => {
+                    const celdas = mapa[dia][hora];
+                    if (!celdas?.length) { fila.push(''); return; }
+                    const b = celdas[0];
+                    fila.push(b.esInicio ? `${b.materia}\n${b.profNombre||''}\n${b.salon||''}` : '▲');
+                });
+                return fila;
+            });
+
+            pdf.autoTable({
+                startY: 32, head, body,
+                styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+                headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: { 0: { cellWidth: 18, halign: 'center', fontStyle: 'bold' } },
+                alternateRowStyles: { fillColor: [248, 250, 252] }
+            });
+
+            const pageH = pdf.internal.pageSize.height;
+            pdf.setFontSize(7); pdf.setTextColor(148,163,184);
+            pdf.text('CredencialesUTN — Documento generado automáticamente', 12, pageH - 6);
+
+            pdf.save(`Horario_${alumno.matricula}_${grupoData.grupo}.pdf`);
+        };
 
         // ==========================================
         //  MÓDULO ADMINISTRADOR (RECTORÍA)
@@ -1675,6 +1865,7 @@
             else if (tab === 'classes') await renderAdminClasses(content);
             else if (tab === 'students') await renderAdminStudents(content);
             else if (tab === 'attendance') await renderAdminAttendance(content);
+            else if (tab === 'reporteFaltas') await renderAdminReporteFaltas(content);
             else if (tab === 'preregistros') await renderAdminPreregistros(content);
         };
 
@@ -2971,30 +3162,109 @@
 
         // --- TAB: ALUMNOS ---
         async function renderAdminStudents(content) {
-            const [snap, gruposSnap] = await Promise.all([
+            const [snap, gruposSnap, profSnap] = await Promise.all([
                 getDocs(getCol('students')),
-                getDocs(getCol('horarios_grupos'))
+                getDocs(getCol('horarios_grupos')),
+                getDocs(getCol('profesores'))
             ]);
-            const students = [];
-            snap.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
 
-            const gruposDisponibles = [];
-            gruposSnap.forEach(d => gruposDisponibles.push({ id: d.id, ...d.data() }));
+            const students = [];
+            snap.forEach(d => students.push({ id: d.id, ...d.data() }));
+
+            const grupos = [];
+            gruposSnap.forEach(d => grupos.push({ id: d.id, ...d.data() }));
+
+            const profesores = [];
+            profSnap.forEach(d => profesores.push({ id: d.id, ...d.data() }));
+
+            // Mapa grupoId → profesores que imparten en ese grupo
+            const profPorGrupo = {}; // grupoId → Set de nombres
+            grupos.forEach(g => {
+                const profSet = new Set();
+                (g.bloques || []).forEach(b => { if (b.profNombre) profSet.add(b.profNombre); });
+                profPorGrupo[g.id] = profSet;
+            });
+
+            // Valores únicos para los filtros
+            const carreras  = [...new Set(students.map(s => s.carrera).filter(Boolean))].sort();
+            const gruposOpts = grupos.sort((a,b) => a.grupo.localeCompare(b.grupo));
+            // Docentes únicos que tienen al menos un grupo con alumnos
+            const docentesSet = new Set();
+            grupos.forEach(g => (g.bloques||[]).forEach(b => { if(b.profNombre) docentesSet.add(b.profNombre); }));
+            const docentes = [...docentesSet].sort();
+
             const gruposOptionsHtml = `<option value="">Sin grupo asignado</option>` +
-                gruposDisponibles.map(g => `<option value="${g.id}" data-nombre="${g.grupo}">${g.grupo} (${g.turno || 'Matutino'})</option>`).join('');
+                gruposOpts.map(g => `<option value="${g.id}" data-nombre="${g.grupo}">${g.grupo} (${g.turno||'Matutino'})</option>`).join('');
+
+            // Guardar datos globalmente para el filtro JS
+            window._adminStudentsData = { students, grupos, profPorGrupo };
 
             content.innerHTML = `
                 <div class="grid lg:grid-cols-3 gap-6 items-start">
-                    
-                    <!-- Lista de Alumnos (Ocupa 2 columnas) -->
-                    <div class="lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col max-h-[700px]">
-                        <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3 bg-slate-50">
-                            <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-users text-blue-600"></i> Alumnos Registrados (${students.length})</h3>
-                            <input type="text" placeholder="Buscar por nombre o matrícula..." class="border rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:border-blue-500" oninput="filterStudentsTable(this.value)">
+
+                    <!-- Lista de Alumnos -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col" style="max-height:800px">
+
+                        <!-- Header + búsqueda -->
+                        <div class="p-4 border-b bg-slate-50 space-y-3">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
+                                <h3 class="font-bold text-lg text-slate-800">
+                                    <i class="ph ph-users text-blue-600"></i>
+                                    Alumnos — <span id="studCountLabel">${students.length}</span> total
+                                </h3>
+                                <button onclick="limpiarFiltrosAlumnos()"
+                                    class="text-xs font-bold text-slate-400 hover:text-slate-700 transition flex items-center gap-1 border border-slate-200 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50">
+                                    <i class="ph ph-funnel-x"></i> Limpiar filtros
+                                </button>
+                            </div>
+
+                            <!-- Filtros en grid -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <!-- Búsqueda nombre/matrícula -->
+                                <div class="sm:col-span-2 relative">
+                                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                    <input type="text" id="filtroTexto" placeholder="Buscar nombre o matrícula..."
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+                                        oninput="aplicarFiltrosAlumnos()">
+                                </div>
+                                <!-- Filtro carrera -->
+                                <div class="relative">
+                                    <i class="ph ph-graduation-cap absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="filtroCarrera" onchange="aplicarFiltrosAlumnos()"
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todas las carreras</option>
+                                        ${carreras.map(c => `<option value="${c}">${c}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <!-- Filtro grupo -->
+                                <div class="relative">
+                                    <i class="ph ph-users-three absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="filtroGrupo" onchange="aplicarFiltrosAlumnos()"
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todos los grupos</option>
+                                        <option value="__sin_grupo__">— Sin grupo asignado</option>
+                                        ${gruposOpts.map(g => `<option value="${g.id}">${g.grupo} (${g.turno||'Matutino'})</option>`).join('')}
+                                    </select>
+                                </div>
+                                <!-- Filtro docente -->
+                                <div class="relative sm:col-span-2">
+                                    <i class="ph ph-chalkboard-teacher absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="filtroDocente" onchange="aplicarFiltrosAlumnos()"
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todos los docentes</option>
+                                        ${docentes.map(d => `<option value="${d}">${d}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Chips de filtros activos -->
+                            <div id="filtrosActivos" class="flex flex-wrap gap-1.5 hidden"></div>
                         </div>
+
+                        <!-- Tabla -->
                         <div class="overflow-y-auto custom-scroll flex-grow">
                             <table class="w-full text-sm text-left">
-                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm">
+                                <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm z-10">
                                     <tr>
                                         <th class="px-4 py-3">Alumno</th>
                                         <th class="px-4 py-3">Matrícula</th>
@@ -3003,73 +3273,104 @@
                                         <th class="px-4 py-3 text-center">Acciones</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${students.length === 0 ? '<tr><td colspan="5" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>' :
-                                    students.map(s => `
-                                        <tr class="border-t hover:bg-slate-50 transition student-row" data-name="${(s.nombre||'').toLowerCase()}" data-mat="${(s.matricula||'').toLowerCase()}">
-                                            <td class="px-4 py-3 flex items-center gap-3">
-                                                <img src="${s.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.nombre||'?') + '&background=15803d&color=fff'}" class="w-8 h-8 rounded-full border border-gray-200">
-                                                <div>
-                                                    <span class="font-bold text-slate-800 block leading-tight">${s.nombre || '—'}</span>
-                                                    <span class="text-[10px] text-gray-400 block">${s.email || '—'}</span>
+                                <tbody id="studTableBody">
+                                    ${students.length === 0
+                                        ? '<tr><td colspan="5" class="text-center py-8 text-gray-400">No hay alumnos registrados.</td></tr>'
+                                        : students.map(s => `
+                                        <tr class="border-t hover:bg-slate-50 transition student-row"
+                                            data-nombre="${(s.nombre||'').toLowerCase()}"
+                                            data-mat="${(s.matricula||'').toLowerCase()}"
+                                            data-carrera="${(s.carrera||'').toLowerCase()}"
+                                            data-grupoid="${s.grupoId||''}"
+                                            data-grupoids="${s.grupoId||'__sin_grupo__'}">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-3">
+                                                    <img src="${s.foto || 'https://ui-avatars.com/api/?name='+encodeURIComponent(s.nombre||'?')+'&background=15803d&color=fff'}"
+                                                        class="w-8 h-8 rounded-full border border-gray-200 flex-shrink-0">
+                                                    <div class="min-w-0">
+                                                        <span class="font-bold text-slate-800 block leading-tight truncate">${s.nombre||'—'}</span>
+                                                        <span class="text-[10px] text-gray-400 block truncate">${s.email||'—'}</span>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td class="px-4 py-3 text-slate-600 font-mono">${s.matricula || '—'}</td>
-                                            <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-block">${s.carrera || '—'}</span></td>
+                                            <td class="px-4 py-3 text-slate-600 font-mono whitespace-nowrap">${s.matricula||'—'}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide inline-block max-w-[110px] truncate" title="${s.carrera||'—'}">
+                                                    ${s.carrera||'—'}
+                                                </span>
+                                            </td>
                                             <td class="px-4 py-3 text-center">
                                                 ${s.grupoNombre
-                                                    ? `<span class="bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide inline-block">${s.grupoNombre}</span>`
-                                                    : `<span class="text-gray-300 text-xs">—</span>`
-                                                }
+                                                    ? `<span class="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide inline-block">${s.grupoNombre}</span>`
+                                                    : `<span class="text-gray-300 text-xs">—</span>`}
                                             </td>
                                             <td class="px-4 py-3 text-center">
                                                 <div class="flex items-center justify-center gap-2">
-                                                    <button onclick="editStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${s.matricula}', '${s.carrera}', '${s.grupoId||''}', '${s.grupoNombre||''}')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold transition" title="Editar Datos"><i class="ph ph-pencil-simple text-lg"></i></button>
-                                                    <button onclick="deleteStudent('${s.id}', '${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" class="bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg text-xs font-bold transition" title="Eliminar Alumno"><i class="ph ph-trash text-lg"></i></button>
+                                                    <button onclick="editStudent('${s.id}','${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${s.matricula}','${s.carrera||''}','${s.grupoId||''}','${s.grupoNombre||''}')"
+                                                        class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition" title="Editar">
+                                                        <i class="ph ph-pencil-simple text-lg"></i>
+                                                    </button>
+                                                    <button onclick="deleteStudent('${s.id}','${(s.nombre||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"
+                                                        class="bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg transition" title="Eliminar">
+                                                        <i class="ph ph-trash text-lg"></i>
+                                                    </button>
                                                 </div>
                                             </td>
-                                        </tr>
-                                    `).join('')}
+                                        </tr>`).join('')}
                                 </tbody>
                             </table>
+                            <!-- Mensaje sin resultados -->
+                            <div id="studNoResults" class="hidden text-center py-12 text-slate-400">
+                                <i class="ph ph-funnel text-4xl mb-3 block opacity-30"></i>
+                                <p class="font-medium">No hay alumnos que coincidan con los filtros.</p>
+                                <button onclick="limpiarFiltrosAlumnos()" class="mt-3 text-xs text-blue-600 hover:underline">Limpiar filtros</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Formulario de Edición (Ocupa 1 columna) -->
+                    <!-- Formulario de Edición -->
                     <div class="bg-white rounded-2xl border shadow-sm p-6 sticky top-24">
-                        <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3"><i class="ph ph-pencil-simple text-blue-600"></i> Editar Alumno</h3>
+                        <h3 class="font-bold text-lg mb-2 text-slate-800 border-b pb-3">
+                            <i class="ph ph-pencil-simple text-blue-600"></i> Editar Alumno
+                        </h3>
                         <p class="text-xs text-gray-500 mb-4">Selecciona un alumno en la tabla para modificar sus datos.</p>
-                        
                         <form id="studentEditForm" class="space-y-4">
                             <input type="hidden" id="editStudId" value="">
-                            
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Nombre Completo</label>
-                                <input type="text" id="editStudNombre" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                                <input type="text" id="editStudNombre" required placeholder="Selecciona un alumno..."
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50" disabled>
                             </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Matrícula</label>
-                                <input type="text" id="editStudMatricula" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                                <input type="text" id="editStudMatricula" required placeholder="—"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50" disabled>
                             </div>
                             <div>
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Carrera</label>
-                                <input type="text" id="editStudCarrera" required placeholder="Selecciona un alumno..." class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                                <input type="text" id="editStudCarrera" required placeholder="—"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50" disabled>
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="ph ph-users-three"></i> Grupo Asignado</label>
-                                <select id="editStudGrupo" class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50 disabled:bg-gray-100" disabled>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                                    <i class="ph ph-users-three"></i> Grupo Asignado
+                                </label>
+                                <select id="editStudGrupo"
+                                    class="w-full p-3 rounded-lg border bg-gray-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-50" disabled>
                                     ${gruposOptionsHtml}
                                 </select>
                                 <p class="text-[10px] text-gray-400 mt-1">El alumno verá el horario de este grupo al iniciar sesión.</p>
                             </div>
-                            
-                            <button type="submit" id="studBtnSubmit" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg mt-2 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <button type="submit" id="studBtnSubmit" disabled
+                                class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 transition shadow-lg flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <i class="ph ph-floppy-disk text-lg"></i> Guardar Cambios
                             </button>
-                            <button type="button" onclick="resetStudentForm()" class="w-full text-xs font-bold text-gray-400 hover:text-gray-600 mt-1 py-2 transition">Cancelar Edición</button>
+                            <button type="button" onclick="resetStudentForm()"
+                                class="w-full text-xs font-bold text-gray-400 hover:text-gray-600 py-2 transition">
+                                Cancelar Edición
+                            </button>
                         </form>
                     </div>
-
                 </div>
             `;
 
@@ -3077,36 +3378,94 @@
                 e.preventDefault();
                 const id = document.getElementById('editStudId').value;
                 if (!id) return;
-
                 const btn = document.getElementById('studBtnSubmit');
                 btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Guardando...';
-
-                const nombre = document.getElementById('editStudNombre').value.trim();
+                const nombre   = document.getElementById('editStudNombre').value.trim();
                 const matricula = document.getElementById('editStudMatricula').value.trim();
-                const carrera = document.getElementById('editStudCarrera').value.trim();
+                const carrera  = document.getElementById('editStudCarrera').value.trim();
                 const grupoSelect = document.getElementById('editStudGrupo');
-                const grupoId = grupoSelect.value;
+                const grupoId  = grupoSelect.value;
                 const grupoNombre = grupoId ? (grupoSelect.options[grupoSelect.selectedIndex].dataset.nombre || '') : '';
-
                 try {
                     await updateDoc(doc(db, 'students', id), { nombre, matricula, carrera, grupoId, grupoNombre });
-                    alert('Datos del alumno actualizados exitosamente.');
+                    alert('Alumno actualizado.');
                     adminTab('students');
                 } catch(err) {
-                    alert('Error al actualizar: ' + err.message);
+                    alert('Error: ' + err.message);
                     resetStudentForm();
                 }
             };
         }
 
-        window.filterStudentsTable = (val) => {
-            const v = val.toLowerCase();
-            document.querySelectorAll('.student-row').forEach(row => {
-                const name = row.dataset.name || '';
-                const mat = row.dataset.mat || '';
-                row.style.display = (name.includes(v) || mat.includes(v)) ? '' : 'none';
+        // ── Filtros alumnos ──────────────────────────────────────
+        window.aplicarFiltrosAlumnos = () => {
+            const texto   = (document.getElementById('filtroTexto')?.value || '').toLowerCase();
+            const carrera = (document.getElementById('filtroCarrera')?.value || '').toLowerCase();
+            const grupoId = document.getElementById('filtroGrupo')?.value || '';
+            const docente = (document.getElementById('filtroDocente')?.value || '').toLowerCase();
+
+            const { profPorGrupo } = window._adminStudentsData || {};
+            const rows = document.querySelectorAll('.student-row');
+            let visibles = 0;
+
+            rows.forEach(row => {
+                const rNombre  = row.dataset.nombre  || '';
+                const rMat     = row.dataset.mat     || '';
+                const rCarrera = row.dataset.carrera || '';
+                const rGrupoId = row.dataset.grupoid || '';
+                const rGrupoIdSin = row.dataset.grupoids || '';
+
+                const okTexto   = !texto   || rNombre.includes(texto)  || rMat.includes(texto);
+                const okCarrera = !carrera || rCarrera === carrera;
+                const okGrupo   = !grupoId || rGrupoIdSin === grupoId;
+
+                // Filtro docente: el alumno pertenece a un grupo donde ese profe imparte
+                let okDocente = true;
+                if (docente && profPorGrupo) {
+                    const profs = profPorGrupo[rGrupoId] || new Set();
+                    okDocente = [...profs].some(p => p.toLowerCase().includes(docente));
+                }
+
+                const visible = okTexto && okCarrera && okGrupo && okDocente;
+                row.style.display = visible ? '' : 'none';
+                if (visible) visibles++;
             });
+
+            // Actualizar contador
+            const lbl = document.getElementById('studCountLabel');
+            if (lbl) lbl.textContent = `${visibles} de ${rows.length}`;
+
+            // Mensaje sin resultados
+            const noRes = document.getElementById('studNoResults');
+            if (noRes) noRes.classList.toggle('hidden', visibles > 0);
+
+            // Chips de filtros activos
+            actualizarChipsFiltros(texto, carrera, grupoId, docente);
         };
+
+        window.limpiarFiltrosAlumnos = () => {
+            ['filtroTexto','filtroCarrera','filtroGrupo','filtroDocente'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            aplicarFiltrosAlumnos();
+        };
+
+        function actualizarChipsFiltros(texto, carrera, grupoId, docente) {
+            const container = document.getElementById('filtrosActivos');
+            if (!container) return;
+            const chips = [];
+            if (texto)   chips.push(`<span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full flex items-center gap-1">"${texto}" <button onclick="document.getElementById('filtroTexto').value='';aplicarFiltrosAlumnos()" class="ml-1 hover:text-blue-900">×</button></span>`);
+            if (carrera) chips.push(`<span class="text-[10px] font-bold bg-green-100 text-green-700 px-2.5 py-1 rounded-full flex items-center gap-1"><i class="ph ph-graduation-cap"></i>${carrera} <button onclick="document.getElementById('filtroCarrera').value='';aplicarFiltrosAlumnos()" class="ml-1 hover:text-green-900">×</button></span>`);
+            if (grupoId) {
+                const sel = document.getElementById('filtroGrupo');
+                const label = sel ? sel.options[sel.selectedIndex]?.text : grupoId;
+                chips.push(`<span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full flex items-center gap-1"><i class="ph ph-users-three"></i>${label} <button onclick="document.getElementById('filtroGrupo').value='';aplicarFiltrosAlumnos()" class="ml-1 hover:text-blue-900">×</button></span>`);
+            }
+            if (docente) chips.push(`<span class="text-[10px] font-bold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full flex items-center gap-1"><i class="ph ph-chalkboard-teacher"></i>${docente} <button onclick="document.getElementById('filtroDocente').value='';aplicarFiltrosAlumnos()" class="ml-1 hover:text-purple-900">×</button></span>`);
+            container.innerHTML = chips.join('');
+            container.classList.toggle('hidden', chips.length === 0);
+        }
 
         window.editStudent = (id, nombre, matricula, carrera, grupoId, grupoNombre) => {
             document.getElementById('editStudId').value = id;
@@ -3150,44 +3509,282 @@
 
         // --- TAB: ASISTENCIAS ---
         async function renderAdminAttendance(content) {
-            const [attendSnap, studSnap] = await Promise.all([ getDocs(getCol('attendance')), getDocs(getCol('students')) ]);
+            content.innerHTML = `<div class="flex justify-center py-16"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900"></div></div>`;
 
-            const names = {}; const mats = {};
-            studSnap.forEach(d => { names[d.id] = d.data().nombre; mats[d.id] = d.data().matricula; });
+            const [asistSnap, studSnap, gruposSnap, sesSnap] = await Promise.all([
+                getDocs(getCol('asistencias')),
+                getDocs(getCol('students')),
+                getDocs(getCol('horarios_grupos')),
+                getDocs(getCol('sesiones_scan'))
+            ]);
 
-            const records = [];
-            attendSnap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
-            records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            // Mapas de referencia
+            const estudMap = {};
+            studSnap.forEach(d => { estudMap[d.id] = { id: d.id, ...d.data() }; });
+
+            const gruposMap = {};
+            gruposSnap.forEach(d => { gruposMap[d.id] = d.data(); });
+
+            const sesMap = {};
+            sesSnap.forEach(d => { sesMap[d.id] = d.data(); });
+
+            // Registros de asistencias ordenados por fecha desc
+            const registros = [];
+            asistSnap.forEach(d => registros.push({ id: d.id, ...d.data() }));
+            registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+            if (registros.length === 0) {
+                content.innerHTML = `
+                    <div class="bg-white rounded-2xl border shadow-sm p-16 text-center text-slate-400">
+                        <i class="ph ph-clipboard-text text-6xl mb-4 block opacity-30"></i>
+                        <p class="font-bold text-lg text-slate-500">Sin registros de asistencia todavía</p>
+                        <p class="text-sm mt-1">Cuando los docentes pasen lista, los registros aparecerán aquí.</p>
+                    </div>`;
+                return;
+            }
+
+            // Valores únicos para filtros
+            const grupos   = [...new Set(registros.map(r => r.grupoNombre).filter(Boolean))].sort();
+            const materias = [...new Set(registros.map(r => r.materia).filter(Boolean))].sort();
+            const profes   = [...new Set(registros.map(r => r.profNombre).filter(Boolean))].sort();
+
+            // Estadísticas generales
+            const totalPuntuales = registros.filter(r => r.tipo !== 'retardo').length;
+            const totalRetardos  = registros.filter(r => r.tipo === 'retardo').length;
+            const alumnosUnicos  = new Set(registros.map(r => r.alumnoId)).size;
+            const sesionesUnicas = new Set(registros.map(r => r.sesionId).filter(Boolean)).size;
+
+            // Resumen por grupo
+            const resumenGrupo = {};
+            registros.forEach(r => {
+                const g = r.grupoNombre || 'Sin grupo';
+                if (!resumenGrupo[g]) resumenGrupo[g] = { asist: 0, retardo: 0, alumnos: new Set() };
+                resumenGrupo[g].asist++;
+                if (r.tipo === 'retardo') resumenGrupo[g].retardo++;
+                if (r.alumnoId) resumenGrupo[g].alumnos.add(r.alumnoId);
+            });
 
             content.innerHTML = `
-                <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                    <div class="p-5 border-b flex items-center justify-between flex-wrap gap-3">
-                        <h3 class="font-bold text-lg text-slate-800"><i class="ph ph-clipboard-text text-blue-600"></i> Historial Global de Asistencias</h3>
-                        <input type="text" placeholder="Filtrar..." class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" oninput="document.querySelectorAll('.att-row').forEach(r => r.style.display = r.innerText.toLowerCase().includes(this.value.toLowerCase()) ? '' : 'none')">
+                <div class="space-y-6">
+
+                    <!-- Tarjetas resumen -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-2xl border shadow-sm p-5 text-center">
+                            <p class="text-3xl font-bold text-green-600">${totalPuntuales}</p>
+                            <p class="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Puntuales</p>
+                        </div>
+                        <div class="bg-white rounded-2xl border shadow-sm p-5 text-center">
+                            <p class="text-3xl font-bold text-amber-500">${totalRetardos}</p>
+                            <p class="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Retardos</p>
+                        </div>
+                        <div class="bg-white rounded-2xl border shadow-sm p-5 text-center">
+                            <p class="text-3xl font-bold text-blue-600">${alumnosUnicos}</p>
+                            <p class="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Alumnos únicos</p>
+                        </div>
+                        <div class="bg-white rounded-2xl border shadow-sm p-5 text-center">
+                            <p class="text-3xl font-bold text-slate-700">${sesionesUnicas}</p>
+                            <p class="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Sesiones</p>
+                        </div>
                     </div>
-                    <div class="overflow-x-auto max-h-[600px] overflow-y-auto custom-scroll">
-                        <table class="w-full text-sm text-left">
-                            <thead class="bg-slate-50 text-gray-500 uppercase text-xs sticky top-0 shadow-sm">
-                                <tr><th class="px-4 py-3">Alumno</th><th class="px-4 py-3">Matrícula</th><th class="px-4 py-3">Fecha</th><th class="px-4 py-3">Hora Validación</th></tr>
-                            </thead>
-                            <tbody>
-                                ${records.length === 0 ? '<tr><td colspan="4" class="text-center py-8 text-gray-400">Sin registros.</td></tr>' :
-                                records.map(r => {
-                                    const d = new Date(r.timestamp);
-                                    return `
-                                    <tr class="border-t hover:bg-slate-50 transition att-row">
-                                        <td class="px-4 py-3 font-bold text-slate-800">${names[r.studentId] || 'Desconocido'}</td>
-                                        <td class="px-4 py-3 text-slate-600 font-mono">${mats[r.studentId] || '—'}</td>
-                                        <td class="px-4 py-3 text-slate-600">${d.toLocaleDateString('es-MX')}</td>
-                                        <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-xs font-bold">${d.toLocaleTimeString('es-MX')}</span></td>
-                                    </tr>`;
-                                }).join('')}
-                            </tbody>
-                        </table>
+
+                    <!-- Resumen por grupo -->
+                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                        <div class="p-5 border-b bg-slate-50">
+                            <h3 class="font-bold text-slate-800"><i class="ph ph-users-three text-blue-600"></i> Resumen por Grupo</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Grupo</th>
+                                        <th class="px-4 py-3 text-center">Total registros</th>
+                                        <th class="px-4 py-3 text-center">Puntuales</th>
+                                        <th class="px-4 py-3 text-center">Retardos</th>
+                                        <th class="px-4 py-3 text-center">Alumnos distintos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Object.entries(resumenGrupo).sort((a,b)=>a[0].localeCompare(b[0])).map(([g, d]) => `
+                                    <tr class="border-t hover:bg-slate-50 transition">
+                                        <td class="px-4 py-3">
+                                            <span class="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg text-xs uppercase tracking-wide">${g}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center font-bold text-slate-700">${d.asist}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">${d.asist - d.retardo}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${d.retardo > 0
+                                                ? `<span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⏰ ${d.retardo}</span>`
+                                                : `<span class="text-slate-300 text-xs">—</span>`}
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-slate-600">${d.alumnos.size}</td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Historial detallado con filtros -->
+                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                        <div class="p-4 border-b bg-slate-50 space-y-3">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
+                                <h3 class="font-bold text-slate-800">
+                                    <i class="ph ph-clipboard-text text-blue-600"></i>
+                                    Historial detallado — <span id="attCountLabel">${registros.length}</span> registros
+                                </h3>
+                                <button onclick="limpiarFiltrosAtt()"
+                                    class="text-xs font-bold text-slate-400 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 transition flex items-center gap-1">
+                                    <i class="ph ph-funnel-x"></i> Limpiar
+                                </button>
+                            </div>
+                            <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-2">
+                                <!-- Búsqueda -->
+                                <div class="relative sm:col-span-2">
+                                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                    <input type="text" id="attFiltroTexto" placeholder="Nombre o matrícula..."
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition"
+                                        oninput="aplicarFiltrosAtt()">
+                                </div>
+                                <!-- Grupo -->
+                                <div class="relative">
+                                    <i class="ph ph-users-three absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="attFiltroGrupo" onchange="aplicarFiltrosAtt()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todos los grupos</option>
+                                        ${grupos.map(g => `<option value="${g}">${g}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <!-- Materia -->
+                                <div class="relative">
+                                    <i class="ph ph-book-open-text absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="attFiltroMateria" onchange="aplicarFiltrosAtt()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todas las materias</option>
+                                        ${materias.map(m => `<option value="${m}">${m}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <!-- Docente -->
+                                <div class="relative">
+                                    <i class="ph ph-chalkboard-teacher absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="attFiltroProf" onchange="aplicarFiltrosAtt()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Todos los docentes</option>
+                                        ${profes.map(p => `<option value="${p}">${p}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <!-- Tipo -->
+                                <div class="relative">
+                                    <i class="ph ph-clock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="attFiltroTipo" onchange="aplicarFiltrosAtt()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition appearance-none">
+                                        <option value="">Puntual y Retardo</option>
+                                        <option value="puntual">Solo Puntuales</option>
+                                        <option value="retardo">Solo Retardos</option>
+                                    </select>
+                                </div>
+                                <!-- Fecha -->
+                                <div class="relative">
+                                    <i class="ph ph-calendar-blank absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <input type="date" id="attFiltroFecha" onchange="aplicarFiltrosAtt()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-blue-500 outline-none transition">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabla -->
+                        <div class="overflow-x-auto max-h-[550px] overflow-y-auto custom-scroll">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Alumno</th>
+                                        <th class="px-4 py-3 text-left">Grupo</th>
+                                        <th class="px-4 py-3 text-left">Materia</th>
+                                        <th class="px-4 py-3 text-left">Docente</th>
+                                        <th class="px-4 py-3 text-center">Tipo</th>
+                                        <th class="px-4 py-3 text-center">Fecha</th>
+                                        <th class="px-4 py-3 text-center">Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attTableBody">
+                                    ${registros.map(r => {
+                                        const fecha  = new Date(r.fecha);
+                                        const alumno = estudMap[r.alumnoId];
+                                        const esPunt = r.tipo !== 'retardo';
+                                        return `
+                                        <tr class="border-t hover:bg-slate-50 transition att-row"
+                                            data-nombre="${(r.alumnoNombre||'').toLowerCase()}"
+                                            data-mat="${(r.matricula||'').toLowerCase()}"
+                                            data-grupo="${(r.grupoNombre||'').toLowerCase()}"
+                                            data-materia="${(r.materia||'').toLowerCase()}"
+                                            data-prof="${(r.profNombre||'').toLowerCase()}"
+                                            data-tipo="${r.tipo||'puntual'}"
+                                            data-fecha="${fecha.toISOString().split('T')[0]}">
+                                            <td class="px-4 py-3">
+                                                <p class="font-semibold text-slate-800 leading-tight">${r.alumnoNombre||'—'}</p>
+                                                <p class="text-[10px] text-slate-400 font-mono">${r.matricula||'—'} · ${alumno?.carrera||''}</p>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <span class="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg uppercase tracking-wide">${r.grupoNombre||'—'}</span>
+                                            </td>
+                                            <td class="px-4 py-3 text-slate-700 font-medium text-xs">${r.materia||'—'}</td>
+                                            <td class="px-4 py-3 text-slate-500 text-xs">${r.profNombre||'—'}</td>
+                                            <td class="px-4 py-3 text-center">
+                                                ${esPunt
+                                                    ? `<span class="text-[10px] font-bold bg-green-100 text-green-700 px-2.5 py-1 rounded-full">✓ Puntual</span>`
+                                                    : `<span class="text-[10px] font-bold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">⏰ Retardo${r.minutosDesdeInicio ? ' +'+r.minutosDesdeInicio+'min' : ''}</span>`}
+                                            </td>
+                                            <td class="px-4 py-3 text-center text-slate-600 text-xs whitespace-nowrap">${fecha.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                                            <td class="px-4 py-3 text-center">
+                                                <span class="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">${fecha.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span>
+                                            </td>
+                                        </tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                            <div id="attNoResults" class="hidden text-center py-10 text-slate-400">
+                                <i class="ph ph-funnel text-3xl mb-2 block opacity-30"></i>
+                                <p class="text-sm font-medium">Sin registros con estos filtros.</p>
+                                <button onclick="limpiarFiltrosAtt()" class="mt-2 text-xs text-blue-600 hover:underline">Limpiar filtros</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
         }
+
+        window.aplicarFiltrosAtt = () => {
+            const texto  = (document.getElementById('attFiltroTexto')?.value  || '').toLowerCase();
+            const grupo  = (document.getElementById('attFiltroGrupo')?.value  || '').toLowerCase();
+            const mat    = (document.getElementById('attFiltroMateria')?.value || '').toLowerCase();
+            const prof   = (document.getElementById('attFiltroProf')?.value   || '').toLowerCase();
+            const tipo   = (document.getElementById('attFiltroTipo')?.value   || '').toLowerCase();
+            const fecha  =  document.getElementById('attFiltroFecha')?.value  || '';
+
+            const rows = document.querySelectorAll('.att-row');
+            let vis = 0;
+            rows.forEach(row => {
+                const ok =
+                    (!texto  || row.dataset.nombre.includes(texto) || row.dataset.mat.includes(texto)) &&
+                    (!grupo  || row.dataset.grupo   === grupo)  &&
+                    (!mat    || row.dataset.materia  === mat)   &&
+                    (!prof   || row.dataset.prof.includes(prof)) &&
+                    (!tipo   || row.dataset.tipo     === tipo)  &&
+                    (!fecha  || row.dataset.fecha    === fecha);
+                row.style.display = ok ? '' : 'none';
+                if (ok) vis++;
+            });
+            const lbl = document.getElementById('attCountLabel');
+            if (lbl) lbl.textContent = `${vis} de ${rows.length}`;
+            const noRes = document.getElementById('attNoResults');
+            if (noRes) noRes.classList.toggle('hidden', vis > 0);
+        };
+
+        window.limpiarFiltrosAtt = () => {
+            ['attFiltroTexto','attFiltroGrupo','attFiltroMateria','attFiltroProf','attFiltroTipo','attFiltroFecha']
+                .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            aplicarFiltrosAtt();
+        };
 
         // --- TAB: PRE-REGISTROS ---
         async function renderAdminPreregistros(content) {
@@ -3508,19 +4105,25 @@
 
                 // Mapa de asistencias: grupoId_materia_alumnoId → Set de fechas
                 const asistMap = {};
+                const retardoMap = {}; // igual pero solo retardos
                 const clasesRealizadasMap = {}; // grupoId_materia → Set de fechas únicas
                 asistSnap.forEach(d => {
                     const a = d.data();
                     if (!a.grupoId || !a.materia || !a.alumnoId || !a.fecha) return;
                     const claveClase = a.grupoId + '||' + a.materia;
                     const claveAlumno = claveClase + '||' + a.alumnoId;
-                    const fecha = a.fecha.split('T')[0]; // solo la fecha YYYY-MM-DD
+                    const fecha = a.fecha.split('T')[0];
 
                     if (!clasesRealizadasMap[claveClase]) clasesRealizadasMap[claveClase] = new Set();
                     clasesRealizadasMap[claveClase].add(fecha);
 
                     if (!asistMap[claveAlumno]) asistMap[claveAlumno] = new Set();
                     asistMap[claveAlumno].add(fecha);
+
+                    if (a.tipo === 'retardo') {
+                        if (!retardoMap[claveAlumno]) retardoMap[claveAlumno] = new Set();
+                        retardoMap[claveAlumno].add(fecha);
+                    }
                 });
 
                 // Encontrar clases que imparte este profesor
@@ -3622,8 +4225,9 @@
                     }).join('') + `</div>`;
 
                 // Guardar datos en window para acceder desde verReporteClase
-                window._profAlumnosPorGrupo   = alumnosPorGrupo;
-                window._profAsistMap           = asistMap;
+                window._profAlumnosPorGrupo    = alumnosPorGrupo;
+                window._profAsistMap            = asistMap;
+                window._profRetardoMap          = retardoMap;
                 window._profClasesRealizadasMap = clasesRealizadasMap;
 
             } catch (err) {
@@ -3748,6 +4352,7 @@
                                 <tr>
                                     <th class="px-4 py-3 text-left">Alumno</th>
                                     <th class="px-4 py-3 text-center">Asistencias</th>
+                                    <th class="px-4 py-3 text-center">Retardos</th>
                                     <th class="px-4 py-3 text-center">Faltas</th>
                                     <th class="px-4 py-3 text-center">Porcentaje</th>
                                     <th class="px-4 py-3 text-center">Estado</th>
@@ -3757,6 +4362,7 @@
                                 ${alumnosCarrera.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'')).map(s => {
                                     const clave = claveClase + '||' + s.id;
                                     const asistencias = asistMap[clave]?.size || 0;
+                                    const retardos = (window._profRetardoMap || {})[clave]?.size || 0;
                                     const faltas = Math.max(0, clasesRealizadas - asistencias);
                                     const pct = clasesRealizadas > 0 ? Math.round((asistencias / clasesRealizadas) * 100) : 100;
                                     const ok = pct >= 70;
@@ -3776,6 +4382,11 @@
                                         <td class="px-4 py-3 text-center">
                                             <span class="font-bold text-green-600">${asistencias}</span>
                                             <span class="text-slate-400 text-xs">/ ${clasesRealizadas}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${retardos > 0
+                                                ? `<span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">⏰ ${retardos}</span>`
+                                                : `<span class="text-slate-300 text-xs">—</span>`}
                                         </td>
                                         <td class="px-4 py-3 text-center">
                                             <span class="font-bold ${faltas > 0 ? 'text-red-500' : 'text-slate-400'}">${faltas}</span>
@@ -3961,6 +4572,643 @@
             pdf.text(`Pág. 1 de ${pdf.internal.getNumberOfPages()}`, 196, pageH - 8, { align: 'right' });
 
             pdf.save(`Reporte_${materia.replace(/[^a-z0-9]/gi,'_')}_${grupoNombre}.pdf`);
+        };
+
+        // ==========================================
+        //  MÓDULO SESIÓN DE ESCANEO (DOCENTE)
+        // ==========================================
+        let sesionTimer = null;
+
+        window.iniciarSesionScan = async () => {
+            const selectClase = document.getElementById('sesionClaseSelect');
+            const tolerancia  = parseInt(document.getElementById('sesionTolerancia').value) || 15;
+            const claveVal    = selectClase ? selectClase.value : '';
+
+            if (!claveVal) { alert('Selecciona una clase primero.'); return; }
+
+            const [grupoId, materia, grupoNombre, turno, salon, hora] = claveVal.split('|||');
+            const ahora  = new Date();
+            // Sin límite de tiempo — el profe la termina manualmente con el botón "Terminar"
+            const expira = new Date(ahora.getTime() + 8 * 60 * 60000); // 8 horas como tope técnico
+
+            const sesion = {
+                profId:       currentProfesor.id,
+                profNombre:   currentProfesor.nombre,
+                profNomina:   currentProfesor.nomina,
+                grupoId, materia, grupoNombre, turno, salon, hora,
+                toleranciaMin: tolerancia,
+                iniciada:     ahora.toISOString(),
+                expira:       expira.toISOString(),
+                activa:       true
+            };
+
+            try {
+                // Desactivar sesiones previas del mismo profesor
+                const q = query(getCol('sesiones_scan'), where('profId','==', currentProfesor.id), where('activa','==', true));
+                const prev = await getDocs(q);
+                for (const d of prev.docs) await updateDoc(doc(db, 'sesiones_scan', d.id), { activa: false });
+
+                const docRef = await addDoc(getCol('sesiones_scan'), sesion);
+                sesion.id = docRef.id;
+                mostrarSesionActiva(sesion, expira);
+            } catch(e) { alert('Error al iniciar sesión: ' + e.message); }
+        };
+
+        function mostrarSesionActiva(sesion, expiraDate) {
+            document.getElementById('sesionFormPanel').classList.add('hidden');
+            document.getElementById('sesionActivaPanel').classList.remove('hidden');
+            document.getElementById('sesionEstadoBadge').textContent = '🟢 Pasando lista';
+            document.getElementById('sesionClaseLabel').textContent = sesion.materia;
+            document.getElementById('sesionDetalleLabel').textContent =
+                `Grupo ${sesion.grupoNombre} · ${sesion.salon} · Inicio: ${sesion.hora} · Tolerancia: ${sesion.toleranciaMin} min`;
+
+            // Guardar sesión activa para el escáner del profe
+            window._sesionActiva = sesion;
+
+            // Contador de tiempo transcurrido
+            if (sesionTimer) clearInterval(sesionTimer);
+            sesionTimer = setInterval(async () => {
+                const ahora = new Date();
+                const inicio = new Date(sesion.iniciada);
+                const transcurrido = Math.floor((ahora - inicio) / 60000);
+                const seg = Math.floor(((ahora - inicio) % 60000) / 1000);
+                const timerEl = document.getElementById('sesionTimerDisplay');
+                if (timerEl) timerEl.textContent = `En curso ${transcurrido}:${String(seg).padStart(2,'0')}`;
+
+                // Barra de tolerancia
+                const limiteRet = new Date(inicio.getTime() + sesion.toleranciaMin * 60000);
+                const tolBar = document.getElementById('sesionToleranciaBar');
+                if (tolBar) {
+                    if (ahora <= limiteRet) {
+                        const restaTol = Math.ceil((limiteRet - ahora) / 60000);
+                        tolBar.textContent = `✓ Dentro de tolerancia — quedan ${restaTol} min para marcar retardo`;
+                        tolBar.className = 'text-xs text-center font-medium py-2 px-4 rounded-xl border bg-green-50 border-green-200 text-green-700';
+                    } else {
+                        const pasados = Math.floor((ahora - limiteRet) / 60000);
+                        tolBar.textContent = `⏰ Tolerancia vencida hace ${pasados} min — nuevos registros = Retardo`;
+                        tolBar.className = 'text-xs text-center font-medium py-2 px-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-700';
+                    }
+                }
+            }, 1000);
+
+            // Enfocar el input automáticamente
+            setTimeout(() => {
+                const inp = document.getElementById('profScanInput');
+                if (inp) inp.focus();
+            }, 150);
+        }
+
+        window.terminarSesionScan = async () => {
+            try {
+                if (sesionTimer) { clearInterval(sesionTimer); sesionTimer = null; }
+                window._sesionActiva = null;
+                const q = query(getCol('sesiones_scan'), where('profId','==', currentProfesor.id), where('activa','==', true));
+                const snap = await getDocs(q);
+                for (const d of snap.docs) await updateDoc(doc(db, 'sesiones_scan', d.id), { activa: false });
+
+                document.getElementById('sesionFormPanel').classList.remove('hidden');
+                document.getElementById('sesionActivaPanel').classList.add('hidden');
+                document.getElementById('sesionEstadoBadge').textContent = 'Sin sesión activa';
+            } catch(e) { alert('Error: ' + e.message); }
+        };
+
+        // Cargar clases del profesor en el select de sesión
+        async function cargarClasesSesionSelect() {
+            const select = document.getElementById('sesionClaseSelect');
+            if (!select) return;
+            try {
+                const snap = await getDocs(getCol('horarios_grupos'));
+                const opciones = ['<option value="">-- Selecciona una clase --</option>'];
+                snap.forEach(d => {
+                    const g = { id: d.id, ...d.data() };
+                    const vistas = new Set();
+                    (g.bloques || []).forEach(b => {
+                        if (b.profId !== currentProfesor.id) return;
+                        const key = g.id + b.materia;
+                        if (vistas.has(key)) return;
+                        vistas.add(key);
+                        const clave = [g.id, b.materia, g.grupo, g.turno||'Matutino', b.salon||'S/A', b.hora].join('|||');
+                        opciones.push(`<option value="${clave}">${b.materia} — Grupo ${g.grupo} (${b.dia} ${b.hora})</option>`);
+                    });
+                });
+                select.innerHTML = opciones.join('');
+
+                // Ver si ya hay sesión activa
+                const qa = query(getCol('sesiones_scan'), where('profId','==', currentProfesor.id), where('activa','==', true));
+                const snapA = await getDocs(qa);
+                if (!snapA.empty) {
+                    const sesion = { id: snapA.docs[0].id, ...snapA.docs[0].data() };
+                    const expira = new Date(sesion.expira);
+                    if (expira > new Date()) {
+                        mostrarSesionActiva(sesion, expira);
+                        actualizarContadoresSesion(sesion);
+                    } else {
+                        await updateDoc(doc(db, 'sesiones_scan', sesion.id), { activa: false });
+                    }
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function actualizarContadoresSesion(sesion) {
+            try {
+                const q = query(getCol('asistencias'), where('sesionId','==', sesion.id || ''));
+                const snap = await getDocs(q);
+                let puntuales = 0, retardos = 0;
+                snap.forEach(d => {
+                    if (d.data().tipo === 'retardo') retardos++;
+                    else puntuales++;
+                });
+                const ep = document.getElementById('sesionCountPuntuales');
+                const er = document.getElementById('sesionCountRetardos');
+                const et = document.getElementById('sesionCountTotal');
+                if (ep) ep.textContent = puntuales;
+                if (er) er.textContent = retardos;
+                if (et) et.textContent = puntuales + retardos;
+            } catch(e) {}
+        }
+
+        // ==========================================
+        //  ESCÁNER INTEGRADO EN PORTAL DOCENTE
+        // ==========================================
+        window.profScanValidar = (val) => {
+            const msg = document.getElementById('profScanMsg');
+            const btn = document.getElementById('btnProfScan');
+            if (!msg || !btn) return;
+            const ok = /^[0-9]{6,8}$/.test(val);
+            msg.textContent = val.length === 0 ? '' : ok ? `✓ ${val.length} dígitos — presiona Enter o el botón` : `${val.length}/8 dígitos...`;
+            msg.className = `mt-1.5 text-xs text-center font-medium min-h-[16px] ${ok ? 'text-green-600' : 'text-slate-400'}`;
+            btn.disabled = !ok;
+            btn.className = ok
+                ? 'flex-shrink-0 bg-green-600 hover:bg-green-700 text-white font-bold px-5 rounded-xl transition flex flex-col items-center justify-center gap-1 text-xs min-w-[64px] shadow-lg'
+                : 'flex-shrink-0 bg-slate-300 cursor-not-allowed text-slate-500 font-bold px-5 rounded-xl transition flex flex-col items-center justify-center gap-1 text-xs min-w-[64px]';
+        };
+
+        window.profRegistrarScan = async () => {
+            const inp = document.getElementById('profScanInput');
+            if (!inp) return;
+            const matricula = inp.value.trim();
+            if (!/^[0-9]{6,8}$/.test(matricula)) return;
+
+            const sesion = window._sesionActiva;
+            if (!sesion) {
+                alert('No hay sesión activa. Inicia una sesión primero.');
+                return;
+            }
+
+            // Calcular tipo puntual/retardo
+            const inicio = new Date(sesion.iniciada);
+            const limiteRetardo = new Date(inicio.getTime() + sesion.toleranciaMin * 60000);
+            const ahora = new Date();
+            const tipo = ahora <= limiteRetardo ? 'puntual' : 'retardo';
+            const minutosDesdeInicio = Math.floor((ahora - inicio) / 60000);
+
+            // Deshabilitar input temporalmente para evitar doble envío
+            inp.disabled = true;
+            const btn = document.getElementById('btnProfScan');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i>'; }
+
+            try {
+                // Buscar alumno
+                const q = query(getCol('students'), where('matricula','==', matricula));
+                const snap = await getDocs(q);
+
+                if (snap.empty) {
+                    mostrarResultadoProf('no_encontrado', null, matricula, tipo, sesion, minutosDesdeInicio);
+                    inp.disabled = false; inp.value = ''; inp.focus();
+                    profScanValidar('');
+                    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+                    return;
+                }
+
+                let alumno = null;
+                snap.forEach(d => alumno = { id: d.id, ...d.data() });
+
+                // ── Validar que el alumno pertenece al grupo de esta sesión ──
+                if (alumno.grupoId !== sesion.grupoId) {
+                    mostrarResultadoProf('grupo_incorrecto', alumno, matricula, tipo, sesion, minutosDesdeInicio);
+                    inp.disabled = false; inp.value = ''; inp.focus();
+                    profScanValidar('');
+                    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+                    return;
+                }
+
+                // ── Evitar duplicado: mismo alumno, misma materia, mismo día ──
+                const hoyStr = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
+                const qDup = query(
+                    getCol('asistencias'),
+                    where('alumnoId','==', alumno.id),
+                    where('grupoId','==', sesion.grupoId),
+                    where('materia','==', sesion.materia)
+                );
+                const snapDup = await getDocs(qDup);
+                let yaRegistradoHoy = false;
+                snapDup.forEach(d => {
+                    const fechaReg = (d.data().fecha || '').split('T')[0];
+                    if (fechaReg === hoyStr) yaRegistradoHoy = true;
+                });
+                if (yaRegistradoHoy) {
+                    mostrarResultadoProf('duplicado', alumno, matricula, tipo, sesion, minutosDesdeInicio);
+                    inp.disabled = false; inp.value = ''; inp.focus();
+                    profScanValidar('');
+                    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+                    return;
+                }
+
+                // Guardar asistencia
+                await addDoc(getCol('asistencias'), {
+                    alumnoId: alumno.id, alumnoNombre: alumno.nombre, matricula,
+                    grupoId: sesion.grupoId, grupoNombre: sesion.grupoNombre,
+                    materia: sesion.materia, salon: sesion.salon,
+                    profId: sesion.profId, profNombre: sesion.profNombre,
+                    sesionId: sesion.id, tipo, minutosDesdeInicio,
+                    fecha: ahora.toISOString(), timestamp: ahora.toISOString()
+                });
+
+                mostrarResultadoProf('ok', alumno, matricula, tipo, sesion, minutosDesdeInicio);
+
+                // Actualizar historial en pantalla
+                const histDiv = document.getElementById('profScanHistorial');
+                const lista   = document.getElementById('profScanHistorialLista');
+                const countEl = document.getElementById('profScanHistorialCount');
+                if (histDiv && lista) {
+                    histDiv.classList.remove('hidden');
+                    const esPuntual = tipo === 'puntual';
+                    const badgeColor = esPuntual ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+                    const badgeText  = esPuntual ? '✓ Puntual' : `⏰ +${minutosDesdeInicio}min`;
+                    lista.insertAdjacentHTML('afterbegin', `
+                        <div class="flex items-center justify-between bg-white border rounded-xl px-3 py-2 text-sm shadow-sm">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div class="w-7 h-7 rounded-full ${esPuntual?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'} flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                    ${alumno.nombre.charAt(0)}
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-medium text-slate-700 truncate leading-tight">${alumno.nombre}</p>
+                                    <p class="text-[10px] text-slate-400 truncate">${alumno.carrera || ''} · ${alumno.matricula}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}">${badgeText}</span>
+                                <span class="text-[10px] text-slate-400">${ahora.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span>
+                            </div>
+                        </div>`);
+                    // Actualizar contador
+                    const totalItems = lista.children.length;
+                    if (countEl) countEl.textContent = totalItems;
+                }
+
+                // Actualizar contadores del header
+                actualizarContadoresSesion(sesion);
+
+                inp.disabled = false; inp.value = ''; inp.focus();
+                profScanValidar('');
+                if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+
+            } catch(err) {
+                const ultimo = document.getElementById('profScanUltimo');
+                if (ultimo) {
+                    ultimo.classList.remove('hidden');
+                    document.getElementById('profScanUltimoHeader').innerHTML = `<span class="text-red-600 font-bold text-sm">Error: ${err.message}</span>`;
+                    document.getElementById('profScanUltimoInfo').innerHTML = '';
+                }
+                inp.disabled = false; inp.value = ''; inp.focus();
+                if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-check-circle text-2xl"></i><span>OK</span>'; }
+            }
+        };
+
+        function mostrarResultadoProf(estado, alumno, matricula, tipo, sesion, minutos) {
+            const ultimo = document.getElementById('profScanUltimo');
+            const header = document.getElementById('profScanUltimoHeader');
+            const info   = document.getElementById('profScanUltimoInfo');
+            if (!ultimo) return;
+            ultimo.classList.remove('hidden');
+
+            if (estado === 'no_encontrado') {
+                ultimo.className = 'rounded-2xl border overflow-hidden border-amber-200 bg-amber-50';
+                header.innerHTML = `
+                    <span class="text-2xl">🔍</span>
+                    <div class="flex-grow">
+                        <p class="font-bold text-amber-800 text-sm">Matrícula no encontrada</p>
+                        <p class="text-xs text-amber-600 mt-0.5">Mat. ${matricula} — no está registrada en el sistema</p>
+                    </div>`;
+                info.innerHTML = '';
+                return;
+            }
+
+            if (estado === 'grupo_incorrecto') {
+                ultimo.className = 'rounded-2xl border overflow-hidden border-red-200 bg-red-50';
+                header.innerHTML = `
+                    <span class="text-2xl flex-shrink-0">🚫</span>
+                    <div class="flex-grow min-w-0">
+                        <p class="font-bold text-red-700 text-sm leading-tight">${alumno.nombre}</p>
+                        <p class="text-xs text-red-500 mt-0.5">Mat. ${matricula} — No corresponde a este grupo</p>
+                    </div>`;
+                const grupoAlumno   = alumno.grupoNombre || 'Sin grupo asignado';
+                const carreraAlumno = alumno.carrera     || 'Sin carrera registrada';
+                info.innerHTML = `
+                    <div class="space-y-1.5 text-xs">
+                        <div class="flex items-center gap-2 text-red-600 font-medium">
+                            <i class="ph ph-x-circle text-base flex-shrink-0"></i>
+                            <span>Alumno: <b>${carreraAlumno}</b> — Grupo <b>${grupoAlumno}</b></span>
+                        </div>
+                        <div class="flex items-center gap-2 text-green-700 font-medium">
+                            <i class="ph ph-check-circle text-base flex-shrink-0"></i>
+                            <span>Esta sesión: Grupo <b>${sesion.grupoNombre}</b></span>
+                        </div>
+                        <p class="text-red-400 text-[10px] pt-1">La asistencia no fue registrada.</p>
+                    </div>`;
+                return;
+            }
+
+            if (estado === 'duplicado') {
+                ultimo.className = 'rounded-2xl border overflow-hidden border-blue-200 bg-blue-50';
+                header.innerHTML = `
+                    <span class="text-2xl flex-shrink-0">📋</span>
+                    <div class="flex-grow min-w-0">
+                        <p class="font-bold text-blue-800 text-sm leading-tight">${alumno.nombre}</p>
+                        <p class="text-xs text-blue-600 mt-0.5">Mat. ${matricula} — Ya tiene asistencia en <b>${sesion.materia}</b> hoy</p>
+                    </div>`;
+                info.innerHTML = `<p class="text-[11px] text-blue-500">No se registró de nuevo. Solo se permite una asistencia por materia por día.</p>`;
+                return;
+            }
+
+            // ok
+            const esPuntual = tipo === 'puntual';
+            ultimo.className = `rounded-2xl border overflow-hidden ${esPuntual ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`;
+            header.innerHTML = `
+                <span class="text-2xl flex-shrink-0">${esPuntual ? '✅' : '⏰'}</span>
+                <div class="flex-grow min-w-0">
+                    <p class="font-bold text-sm leading-tight ${esPuntual?'text-green-800':'text-amber-800'}">${alumno.nombre}</p>
+                    <p class="text-xs mt-0.5 ${esPuntual?'text-green-600':'text-amber-600'}">Mat. ${matricula} &bull; ${alumno.carrera || ''}</p>
+                </div>
+                <span class="text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0 ${esPuntual?'bg-green-200 text-green-900':'bg-amber-200 text-amber-900'}">
+                    ${esPuntual ? '✓ Puntual' : `Retardo +${minutos}min`}
+                </span>`;
+            info.innerHTML = `
+                <div class="flex flex-wrap gap-x-4 gap-y-0.5 text-slate-600">
+                    <span><i class="ph ph-book-open-text"></i> ${sesion.materia}</span>
+                    <span><i class="ph ph-users-three"></i> ${sesion.grupoNombre}</span>
+                    <span><i class="ph ph-map-pin"></i> ${sesion.salon}</span>
+                    ${!esPuntual ? `<span class="text-amber-600 font-medium"><i class="ph ph-clock"></i> Tolerancia: ${sesion.toleranciaMin}min — llegó ${minutos}min después</span>` : ''}
+                </div>`;
+        }
+
+        // ==========================================
+        //  TAB ADMIN: REPORTE GLOBAL DE FALTAS
+        // ==========================================
+        async function renderAdminReporteFaltas(content) {
+            content.innerHTML = `<div class="flex justify-center py-16"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-red-500"></div></div>`;
+
+            const [studSnap, asistSnap, sesSnap] = await Promise.all([
+                getDocs(getCol('students')),
+                getDocs(getCol('asistencias')),
+                getDocs(getCol('sesiones_scan'))
+            ]);
+
+            const alumnos = [];
+            studSnap.forEach(d => alumnos.push({ id: d.id, ...d.data() }));
+
+            // Sesiones por grupo+materia → cuántas hubo
+            const sesionesPorGrupoMat = {}; // grupoId+materia → count
+            sesSnap.forEach(d => {
+                const s = d.data();
+                if (!s.grupoId || !s.materia) return;
+                const key = s.grupoId + '||' + s.materia;
+                sesionesPorGrupoMat[key] = (sesionesPorGrupoMat[key] || 0) + 1;
+            });
+
+            // Asistencias por alumno+materia
+            const asistPorAlumnoMat = {}; // alumnoId+materia → count
+            asistSnap.forEach(d => {
+                const a = d.data();
+                if (!a.alumnoId || !a.materia) return;
+                const key = a.alumnoId + '||' + a.materia;
+                asistPorAlumnoMat[key] = (asistPorAlumnoMat[key] || 0) + 1;
+            });
+
+            // Para cada alumno calcular faltas totales cruzando sus sesiones
+            const reporteAlumnos = alumnos
+                .filter(a => a.grupoId) // solo los que tienen grupo
+                .map(alumno => {
+                    // materias relevantes: las que tienen sesiones en su grupo
+                    const materiasAlumno = Object.keys(sesionesPorGrupoMat)
+                        .filter(k => k.startsWith(alumno.grupoId + '||'))
+                        .map(k => k.split('||')[1]);
+
+                    let totalSesiones = 0, totalAsist = 0, totalFaltas = 0, totalRetardos = 0;
+                    const detalleXmateria = materiasAlumno.map(mat => {
+                        const sesiones = sesionesPorGrupoMat[alumno.grupoId + '||' + mat] || 0;
+                        const asist    = asistPorAlumnoMat[alumno.id + '||' + mat] || 0;
+                        const faltas   = Math.max(0, sesiones - asist);
+                        totalSesiones += sesiones;
+                        totalAsist    += asist;
+                        totalFaltas   += faltas;
+                        return { mat, sesiones, asist, faltas };
+                    });
+
+                    const pct = totalSesiones > 0 ? Math.round((totalAsist / totalSesiones) * 100) : 100;
+                    return { ...alumno, totalSesiones, totalAsist, totalFaltas, pct, detalleXmateria };
+                })
+                .sort((a, b) => a.pct - b.pct); // más críticos primero
+
+            const enRiesgo  = reporteAlumnos.filter(a => a.pct < 70).length;
+            const regulares = reporteAlumnos.filter(a => a.pct >= 70 && a.totalSesiones > 0).length;
+            const sinDatos  = reporteAlumnos.filter(a => a.totalSesiones === 0).length;
+
+            // Filtros de carrera y grupo
+            const carreras = [...new Set(alumnos.map(a => a.carrera).filter(Boolean))].sort();
+            const grupos   = [...new Set(alumnos.filter(a => a.grupoNombre).map(a => a.grupoNombre))].sort();
+
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Resumen -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-red-50 border border-red-200 rounded-2xl p-5 text-center">
+                            <p class="text-3xl font-bold text-red-600">${enRiesgo}</p>
+                            <p class="text-xs text-red-500 mt-1 font-bold uppercase tracking-wider">⚠ En riesgo (&lt;70%)</p>
+                        </div>
+                        <div class="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
+                            <p class="text-3xl font-bold text-green-600">${regulares}</p>
+                            <p class="text-xs text-green-600 mt-1 font-bold uppercase tracking-wider">✓ Regulares (≥70%)</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
+                            <p class="text-3xl font-bold text-slate-400">${sinDatos}</p>
+                            <p class="text-xs text-slate-400 mt-1 font-bold uppercase tracking-wider">Sin sesiones aún</p>
+                        </div>
+                    </div>
+
+                    <!-- Tabla con filtros -->
+                    <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                        <div class="p-4 border-b bg-slate-50 space-y-3">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
+                                <h3 class="font-bold text-slate-800">
+                                    <i class="ph ph-warning-circle text-red-500"></i>
+                                    Reporte por alumno — <span id="rfCountLabel">${reporteAlumnos.length}</span> alumnos
+                                </h3>
+                                <button onclick="limpiarFiltrosRF()"
+                                    class="text-xs font-bold text-slate-400 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 transition flex items-center gap-1">
+                                    <i class="ph ph-funnel-x"></i> Limpiar
+                                </button>
+                            </div>
+                            <div class="grid sm:grid-cols-3 gap-2">
+                                <div class="relative sm:col-span-1">
+                                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                    <input type="text" id="rfFiltroTexto" placeholder="Nombre o matrícula..."
+                                        class="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl bg-white focus:border-red-400 outline-none transition"
+                                        oninput="aplicarFiltrosRF()">
+                                </div>
+                                <div class="relative">
+                                    <i class="ph ph-graduation-cap absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="rfFiltroCarrera" onchange="aplicarFiltrosRF()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-red-400 outline-none transition appearance-none">
+                                        <option value="">Todas las carreras</option>
+                                        ${carreras.map(c=>`<option value="${c}">${c}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="relative">
+                                    <i class="ph ph-users-three absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="rfFiltroGrupo" onchange="aplicarFiltrosRF()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-red-400 outline-none transition appearance-none">
+                                        <option value="">Todos los grupos</option>
+                                        ${grupos.map(g=>`<option value="${g}">${g}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="relative">
+                                    <i class="ph ph-warning-circle absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <select id="rfFiltroEstado" onchange="aplicarFiltrosRF()"
+                                        class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-white focus:border-red-400 outline-none transition appearance-none">
+                                        <option value="">Todos los estados</option>
+                                        <option value="riesgo">Solo en riesgo (&lt;70%)</option>
+                                        <option value="regular">Solo regulares (≥70%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto max-h-[600px] overflow-y-auto custom-scroll">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 shadow-sm z-10">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Alumno</th>
+                                        <th class="px-4 py-3 text-center">Grupo</th>
+                                        <th class="px-4 py-3 text-center">Sesiones</th>
+                                        <th class="px-4 py-3 text-center">Asistencias</th>
+                                        <th class="px-4 py-3 text-center">Faltas</th>
+                                        <th class="px-4 py-3 text-center min-w-[140px]">Porcentaje</th>
+                                        <th class="px-4 py-3 text-center">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${reporteAlumnos.map((a, idx) => {
+                                        const barCol = a.pct >= 80 ? 'bg-green-500' : a.pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
+                                        const estado = a.totalSesiones === 0 ? 'sin_datos'
+                                            : a.pct >= 70 ? 'regular' : 'riesgo';
+                                        return `
+                                        <tr class="border-t hover:bg-slate-50 transition cursor-pointer rf-row"
+                                            data-nombre="${(a.nombre||'').toLowerCase()}"
+                                            data-mat="${(a.matricula||'').toLowerCase()}"
+                                            data-carrera="${(a.carrera||'').toLowerCase()}"
+                                            data-grupo="${(a.grupoNombre||'').toLowerCase()}"
+                                            data-estado="${estado}"
+                                            onclick="toggleRFDetalle(${idx})">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-2">
+                                                    <i id="rfchev-${idx}" class="ph ph-caret-right text-slate-400 flex-shrink-0 transition-transform"></i>
+                                                    <img src="${a.foto||'https://ui-avatars.com/api/?name='+encodeURIComponent(a.nombre||'?')+'&background=15803d&color=fff'}"
+                                                        class="w-7 h-7 rounded-full border border-slate-200 flex-shrink-0">
+                                                    <div class="min-w-0">
+                                                        <p class="font-bold text-slate-800 leading-tight truncate">${a.nombre||'—'}</p>
+                                                        <p class="text-[10px] text-slate-400 font-mono">${a.matricula||'—'} · ${a.carrera||''}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
+                                                <span class="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg">${a.grupoNombre||'—'}</span>
+                                            </td>
+                                            <td class="px-4 py-3 text-center text-slate-500">${a.totalSesiones}</td>
+                                            <td class="px-4 py-3 text-center font-bold text-green-600">${a.totalAsist}</td>
+                                            <td class="px-4 py-3 text-center font-bold ${a.totalFaltas>0?'text-red-500':'text-slate-300'}">${a.totalFaltas}</td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-2">
+                                                    <div class="flex-grow bg-slate-100 rounded-full h-2.5">
+                                                        <div class="${barCol} h-2.5 rounded-full transition-all" style="width:${a.pct}%"></div>
+                                                    </div>
+                                                    <span class="font-bold text-xs min-w-[34px] text-right">${a.pct}%</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
+                                                ${estado==='sin_datos'
+                                                    ? '<span class="text-xs text-slate-400">Sin sesiones</span>'
+                                                    : estado==='regular'
+                                                        ? '<span class="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full">Regular</span>'
+                                                        : '<span class="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">⚠ En riesgo</span>'}
+                                            </td>
+                                        </tr>
+                                        <!-- Fila detalle por materia -->
+                                        <tr id="rf-det-${idx}" class="hidden">
+                                            <td colspan="7" class="px-8 py-3 bg-slate-50 border-b border-slate-100">
+                                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Detalle por materia</p>
+                                                <div class="flex flex-wrap gap-2">
+                                                    ${a.detalleXmateria.map(d => {
+                                                        const pctM = d.sesiones > 0 ? Math.round((d.asist/d.sesiones)*100) : 100;
+                                                        const color = pctM>=80?'bg-green-50 border-green-200 text-green-700':pctM>=70?'bg-amber-50 border-amber-200 text-amber-700':'bg-red-50 border-red-200 text-red-600';
+                                                        return `<span class="text-[10px] font-bold border px-2.5 py-1.5 rounded-xl ${color}">
+                                                            ${d.mat} — ${d.asist}/${d.sesiones} sesiones · <b>${d.faltas} falta${d.faltas!==1?'s':''}</b>
+                                                        </span>`;
+                                                    }).join('')}
+                                                </div>
+                                            </td>
+                                        </tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                            <div id="rfNoResults" class="hidden text-center py-10 text-slate-400">
+                                <i class="ph ph-funnel text-3xl mb-2 block opacity-30"></i>
+                                <p class="text-sm">Sin alumnos con esos filtros.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.toggleRFDetalle = (idx) => {
+            const fila = document.getElementById('rf-det-'+idx);
+            const chev = document.getElementById('rfchev-'+idx);
+            if (!fila) return;
+            fila.classList.toggle('hidden');
+            if (chev) chev.style.transform = fila.classList.contains('hidden') ? '' : 'rotate(90deg)';
+        };
+
+        window.aplicarFiltrosRF = () => {
+            const texto  = (document.getElementById('rfFiltroTexto')?.value   || '').toLowerCase();
+            const carrera= (document.getElementById('rfFiltroCarrera')?.value || '').toLowerCase();
+            const grupo  = (document.getElementById('rfFiltroGrupo')?.value   || '').toLowerCase();
+            const estado = (document.getElementById('rfFiltroEstado')?.value  || '').toLowerCase();
+            const rows   = document.querySelectorAll('.rf-row');
+            let vis = 0;
+            rows.forEach(row => {
+                const ok =
+                    (!texto   || row.dataset.nombre.includes(texto) || row.dataset.mat.includes(texto)) &&
+                    (!carrera || row.dataset.carrera === carrera) &&
+                    (!grupo   || row.dataset.grupo   === grupo)   &&
+                    (!estado  || row.dataset.estado  === estado);
+                // Mostrar/ocultar también la fila de detalle
+                const rfIdx = row.querySelector('[id^="rfchev-"]')?.id.replace('rfchev-','');
+                const detFila = rfIdx !== undefined ? document.getElementById('rf-det-'+rfIdx) : null;
+                row.style.display = ok ? '' : 'none';
+                if (detFila && !ok) detFila.classList.add('hidden');
+                if (ok) vis++;
+            });
+            const lbl = document.getElementById('rfCountLabel');
+            if (lbl) lbl.textContent = vis + ' de ' + rows.length;
+            const noRes = document.getElementById('rfNoResults');
+            if (noRes) noRes.classList.toggle('hidden', vis > 0);
+        };
+
+        window.limpiarFiltrosRF = () => {
+            ['rfFiltroTexto','rfFiltroCarrera','rfFiltroGrupo','rfFiltroEstado']
+                .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+            aplicarFiltrosRF();
         };
 
         window.logoutProfesor = () => { currentProfesor = null; updateAuthUI(); router('home'); };
